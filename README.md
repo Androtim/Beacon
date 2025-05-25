@@ -66,7 +66,7 @@ A React + Node.js web application for synchronized video watching and peer-to-pe
 
 1. **Clone the repository:**
 ```bash
-git clone <repository-url>
+git clone https://github.com/YOUR_USERNAME/Beacon.git
 cd Beacon
 ```
 
