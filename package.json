@@ -1,0 +1,20 @@
+{
+  "name": "beacon",
+  "version": "1.0.0",
+  "description": "Cross-platform sync & share application for watching videos and sharing files",
+  "main": "server/index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "cd server && npm run dev",
+    "client": "cd client && npm run dev",
+    "build": "cd client && npm run build",
+    "start": "cd server && npm start",
+    "install-all": "npm install && cd client && npm install && cd ../server && npm install"
+  },
+  "keywords": ["video", "sync", "p2p", "file-sharing", "webrtc"],
+  "author": "Beacon Team",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

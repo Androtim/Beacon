@@ -1,0 +1,74 @@
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Production builds
+client/dist/
+client/build/
+build/
+dist/
+
+# Environment files
+.env
+.env.local
+.env.production
+.env.development
+server/.env
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+server.log
+
+# IDE and editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+
+# OS files
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+.cache/
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Package lock files (keep one or the other)
+# Uncomment one of these based on your preference:
+# yarn.lock
+# package-lock.json
+
+# MongoDB data
+data/
+
+# Uploads folder (if you have one)
+uploads/
+server/uploads/
+
+# Session store
+sessions/
+
+# SSL certificates
+*.pem
+*.key
+*.crt
+
+# Backup files
+*.backup
+*.bak
+
+# Python (if any scripts)
+__pycache__/
+*.py[cod]
+*$py.class

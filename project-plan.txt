@@ -1,0 +1,86 @@
+BEACON - Cross-Platform Sync & Share Application
+==============================================
+
+PROJECT OVERVIEW:
+Beacon is a cross-platform app for synchronized media viewing, P2P file sharing, and social features.
+
+CORE FEATURES:
+1. Synchronized Media Viewing
+   - Watch locally stored videos in perfect sync with friends
+   - Real-time playback control synchronization
+   - Support for multiple video formats
+
+2. P2P File Sharing
+   - Share files of any size directly between devices
+   - Code-based file sharing system
+   - Expiry dates for shared files
+   - No server storage required
+
+3. Social Features
+   - Private 1-1 chat
+   - Group chat in watch parties
+   - Watch party creation and invitations
+   - Multi-user chat rooms
+
+4. Core App Features
+   - User account creation and authentication
+   - Login/signup pages
+   - Home dashboard
+   - Settings menu
+   - Cross-platform compatibility
+
+ADDITIONAL FEATURES TO CONSIDER:
+- File preview capabilities
+- Video quality adjustment for sync
+- Screen sharing for watch parties
+- Voice chat integration
+- Mobile notifications
+- File compression options
+- Bandwidth optimization
+- User profiles and friend lists
+- Watch history
+- Favorite files/videos
+- Dark/light theme support
+
+DEVELOPMENT PHASES:
+
+Phase 1 (Weeks 1-2): Platform Decision & Core Setup
+- Choose platform approach
+- Set up development environment
+- Create basic UI framework
+- Implement user authentication
+
+Phase 2 (Weeks 3-4): P2P Infrastructure
+- Implement WebRTC/P2P connectivity
+- Basic file sharing functionality
+- Chat system foundation
+
+Phase 3 (Weeks 5-6): Video Synchronization
+- Video player integration
+- Sync mechanism implementation
+- Watch party creation
+
+Phase 4 (Weeks 7-8): Social Features & Polish
+- Enhanced chat features
+- Invitations system
+- UI/UX improvements
+- Testing and optimization
+
+Phase 5 (Weeks 9-10): Cross-Platform & Deployment
+- Platform-specific optimizations
+- Performance testing
+- Deployment preparation
+
+TECHNICAL CONSIDERATIONS:
+- WebRTC for P2P connections
+- Socket.io for real-time communication
+- Video.js or similar for media playback
+- End-to-end encryption for privacy
+- Progressive Web App vs Native App decision
+
+QUESTIONS FOR CLARIFICATION:
+1. Platform preference (Web/Windows/Android first?)
+2. Target audience size
+3. Video format priorities
+4. Privacy/security requirements
+5. Monetization plans (affects architecture)
