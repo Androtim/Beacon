@@ -16,11 +16,22 @@ const server = createServer(app);
 const io = new Server(server, {
   cors: {
     origin: "http://localhost:3000",
-    methods: ["GET", "POST"]
-  }
+    methods: ["GET", "POST"],
+    credentials: true,
+    allowedHeaders: ["authorization"]
+  },
+  // Add connection options for better reliability
+  transports: ['polling', 'websocket'],
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:3000',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 
 const PORT = process.env.PORT || 3001;
@@ -110,7 +121,14 @@ const fileShares = new Map();
 const onlineUsers = new Map();
 
 io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
+  console.log('✅ User connected:', socket.id);
+  console.log('   Transport:', socket.conn.transport.name);
+  
+  // Send connection success event to client
+  socket.emit('connection-success', { 
+    message: 'Connected to server',
+    socketId: socket.id 
+  });
   
   // Handle user authentication for messaging
   socket.on('authenticate', (userData) => {
@@ -454,9 +472,27 @@ io.on('connection', (socket) => {
   });
 });
 
+// Add socket.io error handling
+io.on('connect_error', (error) => {
+  console.error('❌ Socket.IO connection error:', error.message);
+});
+
+// Handle server errors
+server.on('error', (error) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(`❌ Port ${PORT} is already in use!`);
+    console.error('💡 Try running: lsof -i :3001 | grep LISTEN');
+    console.error('💡 Then kill the process: kill -9 <PID>');
+    process.exit(1);
+  } else {
+    console.error('❌ Server error:', error);
+  }
+});
+
 server.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
   console.log(`🌐 Frontend: http://localhost:3000`);
   console.log(`🔧 Backend: http://localhost:${PORT}`);
   console.log(`📊 Database: ${usingMongoDB ? 'MongoDB' : 'In-memory'}`);
+  console.log(`🔌 Socket.IO: Enabled with polling and websocket transports`);
 });

@@ -14,8 +14,14 @@ export function useSocket(serverUrl = 'http://localhost:3001') {
       transports: ['polling', 'websocket'], // Try polling first
       forceNew: true,
       reconnection: true,
-      reconnectionAttempts: 3,
-      reconnectionDelay: 1000
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      withCredentials: true,
+      // Add custom headers if needed for auth
+      auth: user ? {
+        userId: user.id,
+        username: user.username
+      } : {}
     })
 
     socketRef.current.on('connect', () => {
@@ -23,14 +29,28 @@ export function useSocket(serverUrl = 'http://localhost:3001') {
       setConnected(true)
     })
 
-    socketRef.current.on('disconnect', () => {
-      console.log('❌ Disconnected from server')
+    socketRef.current.on('connection-success', (data) => {
+      console.log('✅ Connection confirmed:', data)
+    })
+
+    socketRef.current.on('disconnect', (reason) => {
+      console.log('❌ Disconnected from server:', reason)
       setConnected(false)
     })
 
     socketRef.current.on('connect_error', (error) => {
-      console.error('❌ Connection error:', error)
+      console.error('❌ Connection error:', error.message)
+      console.error('   Type:', error.type)
+      console.error('   Transport:', error.transport)
       setConnected(false)
+    })
+
+    socketRef.current.on('reconnect_attempt', (attemptNumber) => {
+      console.log(`🔄 Reconnection attempt ${attemptNumber}`)
+    })
+
+    socketRef.current.on('reconnect', (attemptNumber) => {
+      console.log(`✅ Reconnected after ${attemptNumber} attempts`)
     })
 
     return () => {
