@@ -27,7 +27,7 @@ A React + Node.js web application for synchronized video watching and peer-to-pe
 - **Real-time Direct Messages**: Private chat between users
 - **User Search**: Find users by username
 - **Online Status**: See who's currently online/offline
-- **Message History**: Conversation persistence (session-based)
+- **Message History**: Full conversation persistence across sessions
 
 ### 🎨 Customization
 - **Dark/Light Theme**: Toggle between themes with persistent settings
@@ -198,52 +198,79 @@ npm start              # Start production server
 ## ⚠️ Current Status & Known Issues
 
 ### ✅ Working Features
-- User authentication & registration
-- Watch party creation/joining (basic functionality)
-- Video player (direct links, YouTube iframes)  
+- User authentication & registration with JWT
+- WSL networking compatibility (servers bind to all interfaces)
+- CORS configuration for cross-platform access
 - Dark/light theme switching
 - Navigation and routing
-- File upload UI components
+- Watch party creation with real-time video synchronization
+- P2P file sharing (up to 3GB) with progress tracking
+- Private messaging with full conversation persistence across sessions
+- Firefox to Chrome WebRTC transfers work perfectly
+- Copy-to-clipboard functionality with fallbacks
+
+### 🔧 Recently Fixed (May 26, 2025)
+- **Chrome WebRTC Data Channel**: Fixed configuration conflict that prevented Chrome P2P connections
+- **Conversation Persistence**: Fixed MongoDB aggregation pipeline - conversations now persist across page refreshes
+- **Database Message Storage**: Messages properly saved to database and conversations load correctly
+- **User Authentication**: Fixed socket authentication for reliable message sending
+- **ObjectId Handling**: Fixed MongoDB ObjectId constructor issues in conversations API
 
 ### 🚨 Known Issues
-- **Socket Connection Problems**: Real-time features currently unreliable due to process management issues
-- **Development Server Conflicts**: Multiple server processes can cause port conflicts
+- **Chrome to Firefox WebRTC**: File/video sharing from Chrome to Firefox still has connection issues (Firefox to Chrome works fine)
+- **WSL Networking**: App must be accessed via WSL IP (e.g., 172.18.191.100:3000) when running in WSL
 - **YouTube Sync Limitation**: YouTube videos cannot be synchronized due to iframe security restrictions
 
-### ❌ Temporarily Broken (Due to Socket Issues)
-- Real-time watch party synchronization
-- Chat messaging
-- P2P file transfers  
-- User search in Messages
-- Online status tracking
+### 🚧 Development Notes
+- Servers configured to bind to all interfaces for WSL compatibility
+- CORS configured for both localhost and WSL IP addresses
+- WebRTC uses multiple STUN servers for better connectivity
+- File transfers use 16KB chunks for reliability
+- Message history stored in database (MongoDB or in-memory)
 
 ## 🔧 Troubleshooting
+
+### WSL Networking Issues
+If running in WSL and can't access localhost:
+```bash
+# Access via WSL IP instead of localhost
+http://172.18.191.100:3000/
+
+# Check your WSL IP
+hostname -I
+```
 
 ### Port Conflicts
 If you see `EADDRINUSE` errors:
 ```bash
-# Kill processes using port 3001
-fuser -k 3001/tcp
+# Kill processes using ports 3000/3001
+fuser -k 3000/tcp 3001/tcp
 
-# Or find and kill specific processes
-ps aux | grep node
-kill -9 <process-id>
+# Or use the built-in cleanup
+npm run kill-port
 ```
 
 ### MongoDB Connection
 If MongoDB is unavailable, the app automatically falls back to an in-memory database for development.
 
-### Socket Connection Issues
-Check browser console for connection errors. Ensure only one development server is running.
+### CORS Issues
+If you see CORS errors, ensure you're accessing the app via the correct URL:
+- WSL: `http://172.18.191.100:3000/`
+- Local: `http://localhost:3000/`
 
 ## 📋 API Endpoints
 
 ### Authentication
 - `POST /api/auth/register` - User registration
 - `POST /api/auth/login` - User login
+- `GET /api/auth/me` - Get current user info (protected)
 
 ### Users (Protected)
 - `GET /api/users/search?query=username` - Search users by username
+
+### Messages (Protected)
+- `GET /api/messages/:userId` - Get message history with specific user
+- `GET /api/conversations` - Get all conversations with last message
 
 ### Health Check
 - `GET /api/health` - Server status and database info

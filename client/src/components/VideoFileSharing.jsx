@@ -2,6 +2,11 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { Upload, Users, Play, Pause, Download, AlertCircle, CheckCircle } from 'lucide-react'
 import SimplePeer from 'simple-peer'
 
+// Detect if running in Chrome
+const isChrome = () => {
+  return /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor)
+}
+
 export default function VideoFileSharing({ socket, roomId, isHost, participants, onVideoReady, hostVideoSource }) {
   const [selectedFile, setSelectedFile] = useState(null)
   const [uploadProgress, setUploadProgress] = useState(0)
@@ -40,8 +45,8 @@ export default function VideoFileSharing({ socket, roomId, isHost, participants,
             total: chunks.length
           })
           
-          // Wait for buffer to be ready
-          while (peer._channel && peer._channel.bufferedAmount > 65536) {
+          // Wait for buffer to be ready (reduced threshold for Chrome)
+          while (peer._channel && peer._channel.bufferedAmount > 16384) {
             await new Promise(resolve => setTimeout(resolve, 50))
           }
           
@@ -79,12 +84,52 @@ export default function VideoFileSharing({ socket, roomId, isHost, participants,
     }
     const peer = new SimplePeer({ 
       initiator: false,
-      trickle: false,
+      trickle: isChrome() ? true : false,  // Enable trickle for Chrome
       config: {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' }
-        ]
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' },
+          { urls: 'stun:stun3.l.google.com:19302' },
+          { urls: 'stun:stun4.l.google.com:19302' },
+          // Add more STUN servers for better connectivity
+          { urls: 'stun:stun.services.mozilla.com' },
+          { urls: 'stun:stun.stunprotocol.org:3478' },
+          // Add public TURN servers for NAT traversal
+          {
+            urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          },
+          {
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          }
+        ],
+        // Chrome-specific ICE configuration
+        iceTransportPolicy: 'all',
+        bundlePolicy: 'balanced',
+        rtcpMuxPolicy: 'require'
+      },
+      // Enhanced offer options for Chrome
+      offerOptions: {
+        offerToReceiveAudio: false,
+        offerToReceiveVideo: false,
+        iceRestart: true
+      },
+      // Chrome-compatible channel configuration
+      channelConfig: {
+        ordered: true,
+        maxRetransmits: 10,
+        protocol: 'video-transfer'
+      },
+      // Chrome-specific constraints
+      constraints: {
+        mandatory: {
+          OfferToReceiveAudio: false,
+          OfferToReceiveVideo: false
+        }
       }
     })
     peersRef.current[from] = peer
@@ -103,19 +148,36 @@ export default function VideoFileSharing({ socket, roomId, isHost, participants,
       delete peersRef.current[from]
     })
     
+    // Monitor connection state for debugging
+    peer.on('iceStateChange', (iceConnectionState, iceGatheringState) => {
+      console.log('ICE state change:', iceConnectionState, iceGatheringState)
+    })
+    
+    peer.on('connect', () => {
+      console.log('Peer connected successfully')
+    })
+    
     // Send ready signal to requester
     socket.emit('video-file-ready', { to: from, fileInfo: fileInfoRef.current })
   }, [socket, selectedFile, isHost, sendVideoFile])
 
   const handleVideoFileInfo = useCallback(({ fileInfo, hostId }) => {
-    console.log('Received video file info:', fileInfo, 'from host:', hostId)
-    if (isHost) return // Host doesn't need to download their own file
+    console.log('🎥 Received video file info:', {
+      fileInfo,
+      hostId,
+      isHost,
+      mySocketId: socket?.id
+    })
+    if (isHost) {
+      console.log('🎥 Ignoring - I am the host')
+      return // Host doesn't need to download their own file
+    }
 
     // Show confirmation dialog
     setSharingStatus('pending')
     setPendingFileInfo(fileInfo)
     setPendingHostId(hostId)
-  }, [isHost])
+  }, [isHost, socket])
 
   const handleVideoReady = useCallback(({ from, fileInfo }) => {
     console.log('Received video-file-ready from:', from)
@@ -123,12 +185,52 @@ export default function VideoFileSharing({ socket, roomId, isHost, participants,
 
     const peer = new SimplePeer({ 
       initiator: true,
-      trickle: false,
+      trickle: isChrome() ? true : false,  // Enable trickle for Chrome
       config: {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' }
-        ]
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' },
+          { urls: 'stun:stun3.l.google.com:19302' },
+          { urls: 'stun:stun4.l.google.com:19302' },
+          // Add more STUN servers for better connectivity
+          { urls: 'stun:stun.services.mozilla.com' },
+          { urls: 'stun:stun.stunprotocol.org:3478' },
+          // Add public TURN servers for NAT traversal
+          {
+            urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          },
+          {
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          }
+        ],
+        // Chrome-specific ICE configuration
+        iceTransportPolicy: 'all',
+        bundlePolicy: 'balanced',
+        rtcpMuxPolicy: 'require'
+      },
+      // Enhanced offer options for Chrome
+      offerOptions: {
+        offerToReceiveAudio: false,
+        offerToReceiveVideo: false,
+        iceRestart: true
+      },
+      // Chrome-compatible channel configuration
+      channelConfig: {
+        ordered: true,
+        maxRetransmits: 10,
+        protocol: 'video-transfer'
+      },
+      // Chrome-specific constraints
+      constraints: {
+        mandatory: {
+          OfferToReceiveAudio: false,
+          OfferToReceiveVideo: false
+        }
       }
     })
     peersRef.current[from] = peer
@@ -200,6 +302,15 @@ export default function VideoFileSharing({ socket, roomId, isHost, participants,
     peer.on('error', err => {
       setSharingStatus('error')
       delete peersRef.current[from]
+    })
+    
+    // Monitor connection state for debugging
+    peer.on('iceStateChange', (iceConnectionState, iceGatheringState) => {
+      console.log('ICE state change:', iceConnectionState, iceGatheringState)
+    })
+    
+    peer.on('connect', () => {
+      console.log('Peer connected successfully')
     })
   }, [socket, isHost, onVideoReady])
 
@@ -308,6 +419,11 @@ export default function VideoFileSharing({ socket, roomId, isHost, participants,
     }
 
     // Broadcast video file info to all participants
+    console.log('🎥 Broadcasting video file share:', {
+      roomId,
+      fileInfo: fileInfoRef.current,
+      socketId: socket.id
+    })
     socket.emit('video-file-share', {
       roomId,
       fileInfo: fileInfoRef.current

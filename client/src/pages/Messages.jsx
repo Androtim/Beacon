@@ -16,6 +16,8 @@ export default function Messages() {
   const [isSearching, setIsSearching] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
   const [conversations, setConversations] = useState([]) // Users we have conversations with
+  const [loadingMessages, setLoadingMessages] = useState(false)
+  const [loadingConversations, setLoadingConversations] = useState(true)
   const messagesEndRef = useRef(null)
   const searchTimeoutRef = useRef(null)
 
@@ -26,6 +28,106 @@ export default function Messages() {
   useEffect(() => {
     scrollToBottom()
   }, [messages, selectedUser])
+  
+  // Load conversations on mount
+  useEffect(() => {
+    const loadConversations = async () => {
+      try {
+        const token = localStorage.getItem('token')
+        const response = await axios.get(`${axios.defaults.baseURL}/api/conversations`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        
+        // Convert conversations to user format for display
+        const convUsers = response.data.conversations.map(conv => ({
+          ...conv.user,
+          lastMessage: conv.lastMessage,
+          unreadCount: conv.unreadCount
+        }))
+        
+        setConversations(convUsers)
+        
+        // Also load messages for each conversation to populate the messages state
+        const messagePromises = convUsers.map(async (convUser) => {
+          // Skip if user ID is undefined
+          if (!convUser.id || convUser.id === 'undefined') {
+            console.warn('Skipping user with undefined ID:', convUser)
+            return { userId: convUser.id, messages: [] }
+          }
+          
+          try {
+            const msgResponse = await axios.get(`${axios.defaults.baseURL}/api/messages/${convUser.id}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            })
+            
+            const formattedMessages = msgResponse.data.messages.map(msg => ({
+              from: msg.from,
+              to: msg.to,
+              message: msg.message,
+              timestamp: msg.timestamp,
+              isOwn: msg.from.id === user.id
+            }))
+            
+            return { userId: convUser.id, messages: formattedMessages }
+          } catch (error) {
+            console.error(`Error loading messages for user ${convUser.id}:`, error)
+            return { userId: convUser.id, messages: [] }
+          }
+        })
+        
+        const messagesData = await Promise.all(messagePromises)
+        const messagesMap = {}
+        messagesData.forEach(({ userId, messages }) => {
+          messagesMap[userId] = messages
+        })
+        
+        setMessages(messagesMap)
+      } catch (error) {
+        console.error('Error loading conversations:', error)
+      } finally {
+        setLoadingConversations(false)
+      }
+    }
+    
+    if (user?.id) {
+      loadConversations()
+    }
+  }, [user])
+  
+  // Load message history when selecting a user
+  useEffect(() => {
+    if (!selectedUser) return
+    
+    const loadMessageHistory = async () => {
+      setLoadingMessages(true)
+      try {
+        const token = localStorage.getItem('token')
+        const response = await axios.get(`${axios.defaults.baseURL}/api/messages/${selectedUser.id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        
+        // Convert messages to the expected format
+        const formattedMessages = response.data.messages.map(msg => ({
+          from: msg.from,
+          to: msg.to,
+          message: msg.message,
+          timestamp: msg.timestamp,
+          isOwn: msg.from.id === user.id
+        }))
+        
+        setMessages(prev => ({
+          ...prev,
+          [selectedUser.id]: formattedMessages
+        }))
+      } catch (error) {
+        console.error('Error loading message history:', error)
+      } finally {
+        setLoadingMessages(false)
+      }
+    }
+    
+    loadMessageHistory()
+  }, [selectedUser, user.id])
 
   // Search for users when query changes
   useEffect(() => {
@@ -90,9 +192,13 @@ export default function Messages() {
       }))
 
       // Add sender to conversations if not already there
-      if (!conversations.find(u => u.id === from.id)) {
-        setConversations(prev => [...prev, from])
-      }
+      setConversations(prev => {
+        const exists = prev.find(u => u.id === from.id)
+        if (!exists) {
+          return [...prev, from]
+        }
+        return prev
+      })
     })
 
     // Listen for user status changes
@@ -252,7 +358,12 @@ export default function Messages() {
 
             {/* Conversations */}
             <div className="flex-1 overflow-y-auto">
-              {conversations.length > 0 && (
+              {loadingConversations ? (
+                <div className="text-center text-gray-500 dark:text-gray-400 p-4">
+                  <Loader className="h-5 w-5 animate-spin mx-auto mb-2" />
+                  <p>Loading conversations...</p>
+                </div>
+              ) : conversations.length > 0 ? (
                 <>
                   <div className="p-2 text-sm font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">Conversations</div>
                   {conversations.map((u) => (
@@ -287,6 +398,11 @@ export default function Messages() {
                     </div>
                   ))}
                 </>
+              ) : (
+                <div className="text-center text-gray-500 dark:text-gray-400 p-4">
+                  <p>No conversations yet</p>
+                  <p className="text-sm mt-2">Search for users to start chatting</p>
+                </div>
               )}
             </div>
           </div>
@@ -321,7 +437,7 @@ export default function Messages() {
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
                   {messages[selectedUser.id]?.map((msg, index) => (
                     <div
-                      key={index}
+                      key={`${msg.timestamp}-${msg.from.id || index}`}
                       className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'}`}
                     >
                       <div

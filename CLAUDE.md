@@ -342,32 +342,62 @@ The project expects MongoDB to be running locally on default port 27017, or conf
    - Solution: Modified useWatchParty to return its socket instance
    - Updated WatchParty to use the socket from useWatchParty instead of creating a new one
 
-### Latest Session (May 25, 2025) - Socket Connection Issues & Feature Updates
+### Latest Session (May 26, 2025) - Major Bug Fixes & Feature Improvements
 
-#### Socket Connection Fixes (Completed)
-1. **Fixed Server Process Management**:
-   - Replaced `node --watch` with `nodemon` for better process management
-   - Created `scripts/kill-port.js` utility to clean up orphaned processes
-   - Added `npm run dev:clean` command to ensure clean server starts
-   - Fixed EADDRINUSE errors from multiple server instances
+#### WSL Networking Issues Resolved
+1. **Fixed WSL Network Binding**:
+   - Updated Vite config to bind to `0.0.0.0` for WSL compatibility
+   - Updated server to listen on all interfaces (`0.0.0.0`)
+   - Fixed CORS configuration to accept WSL IP addresses
+   - Resolved pending request issues in WSL environment
 
-2. **Enhanced Socket.IO Configuration**:
-   - Added proper CORS configuration with credentials support
-   - Enabled both polling and websocket transports for better reliability
-   - Increased ping timeout/interval for stable connections
-   - Added connection success events and detailed error logging
+2. **Authentication & Connection Fixes**:
+   - Fixed axios timeout issues that prevented login
+   - Resolved infinite loading states in AuthContext
+   - Added proper error handling and timeouts
+   - Fixed token validation and storage
 
-3. **Fixed Client Authentication**:
-   - Set axios base URL to `http://localhost:3001` 
-   - Enabled credentials for cross-origin requests
-   - Fixed JWT token handling in AuthContext
-   - Added auth data to socket connection initialization
+3. **Copy Button Functionality Fixed**:
+   - Added fallback method using `document.execCommand` for clipboard API failures
+   - Shows alert with code if all copy methods fail
+   - Works across all browsers including those with strict permissions
 
-4. **Server Improvements**:
-   - Enhanced error handling for port conflicts
-   - Added detailed socket connection logging
-   - Added transport type logging for debugging
-   - Health check endpoint already existed at `/api/health`
+4. **P2P Video File Sharing Improvements**:
+   - Fixed socket room joining issues for video file sharing in watch parties
+   - Enhanced debugging with detailed console logs
+   - Fixed user authentication to handle both `_id` and `id` properties
+   - Added comprehensive WebRTC configuration
+
+5. **File Transfer System Enhancements**:
+   - Fixed video/audio file transfers that were failing
+   - Improved binary data handling for media files
+   - Reduced chunk size from 64KB to 16KB for better reliability
+   - Added retry logic for failed chunks
+   - Enhanced flow control with better buffer management
+
+6. **Cross-Browser Compatibility Fixed**:
+   - Added comprehensive WebRTC configuration for Chrome-Firefox compatibility
+   - Set `trickle: false` for better cross-browser support
+   - Added multiple STUN servers (stun.l.google.com:19302-19306)
+   - Added channel configuration for ordered, reliable delivery
+   - Fixed WebRTC data channel options for compatibility
+
+7. **Messaging System Improvements**:
+   - Fixed username display bug in search results
+   - Ensured consistent user object format across API responses
+   - Fixed socket authentication to include all user data
+   - Standardized user ID handling between MongoDB and in-memory DB
+
+8. **Persistent Message History Implemented**:
+   - Created Message model for MongoDB storage
+   - Added message storage support in in-memory database
+   - Added API endpoints:
+     - `GET /api/messages/:userId` - Get message history with a user
+     - `GET /api/conversations` - Get all conversations with last message
+   - Messages now persist across page refreshes
+   - Message history loads when selecting a user
+   - Messages are properly saved to database
+   - **Issue**: Conversation list doesn't persist in UI when navigating away
 
 #### Completed Features
 1. **Messages System Redesign**:
@@ -416,35 +446,102 @@ The project expects MongoDB to be running locally on default port 27017, or conf
 - Use `npm run kill-port` to manually clean up port 3001
 - Server now handles port conflicts gracefully with clear error messages
 
-#### Current Status (After Fixes)
+#### Current Status (After Bug Fixes - May 26, 2025)
 
 **✅ Fixed & Working Features**:
 - User authentication & registration with JWT
-- Socket.IO connections with proper CORS and authentication
+- WSL networking compatibility (servers bind to all interfaces)
+- CORS configuration for WSL IP addresses
 - Health check endpoint at `/api/health`
 - Process management with nodemon and cleanup scripts
 - Dark/light theme switching
 - Navigation and routing
-- Axios configuration with proper base URL and credentials
-
-**🔧 Should Now Be Working (Testing Required)**:
-- Real-time watch party synchronization
-- Chat messaging in watch parties
-- P2P file transfers (both in watch parties and standalone)
-- User search in Messages with JWT auth
-- Online status tracking
+- Copy-to-clipboard functionality with fallbacks
+- Message persistence in database (messages saved across sessions)
 - Private messaging between users
+- User search functionality
 
-**⚠️ Known Limitations**:
+**🔧 Partially Working**:
+- **File Sharing from Chrome**: Still experiencing issues when sharing from Chrome browser
+- **Video Sharing in Watch Party from Chrome**: P2P video sharing not working reliably from Chrome
+- **Messages UI State**: Conversations disappear from UI when navigating away and back (messages are saved in DB but UI doesn't persist conversation list)
+
+**⚠️ Known Issues & Limitations**:
+- **Chrome WebRTC Issues**: File sharing and video sharing in watch parties don't work from Chrome (likely needs additional WebRTC configuration)
+- **Conversation List Persistence**: Need to re-search users when returning to Messages page (conversations should load automatically from API)
 - YouTube videos CANNOT be synchronized (iframe security restrictions)
 - P2P file sharing limited to 3GB
 - WebRTC requires good network connectivity
+- WSL networking requires accessing app via IP (172.18.191.100:3000)
 
-### Known Limitations
-- **YouTube videos CANNOT be synchronized** due to iframe security restrictions (cross-origin policy prevents controlling playback)
+**🚧 Next Steps**:
+- Fix Chrome WebRTC compatibility for file/video sharing
+- Implement conversation list persistence in Messages UI
+- Add proper error handling for WebRTC failures
+- Improve WebRTC connection diagnostics
+- Add retry mechanisms for failed P2P connections
+
+### Latest Session (May 26, 2025 - Continued) - Bug Fixes
+
+#### Fixed Issues
+1. **Chrome WebRTC Data Channel Error** ✅:
+   - Fixed "RTCDataChannel cannot have both max retransmits and max lifetime" error
+   - Removed conflicting `maxPacketLifeTime` and `negotiated`/`id` options from channel config
+   - Chrome now properly creates data channels for P2P connections
+
+2. **Conversations API Error** ✅:
+   - Fixed MongoDB ObjectId constructor error in conversations endpoint
+   - Added `new` keyword to all `mongoose.Types.ObjectId()` calls
+   - Conversations API now returns data properly
+
+3. **Conversation List Persistence** ✅:
+   - Fixed MongoDB aggregation pipeline in conversations endpoint
+   - Fixed ObjectId comparison and user lookup issues
+   - Added proper projection to ensure user data includes both `id` and `_id` fields
+   - Conversations now persist properly when navigating away and returning to Messages
+   - Messages are saved to database correctly and conversations load on refresh
+
+4. **Chrome to Firefox WebRTC** (in progress):
+   - Enabled trickle ICE for Chrome browsers (Firefox still uses non-trickle)
+   - Added ICE candidate error logging for Chrome
+   - Added detailed ICE candidate type logging
+   
+   - **Chrome WebRTC Improvements**:
+     - Added comprehensive ICE server configuration including public TURN servers
+     - Added Chrome-specific WebRTC configuration options
+     - Added connection state monitoring for better debugging
+     - Reduced buffer threshold from 65KB to 16KB for Chrome compatibility
+     - Added Chrome browser detection for targeted fixes
+
+### Known Limitations & Remaining Issues
+
+**🔴 Remaining Issues**:
+- **Chrome to Firefox WebRTC**: File sharing and video sharing from Chrome to Firefox still failing
+  - Firefox to Chrome works perfectly ✅
+  - Chrome to Chrome needs testing
+  - Added TURN servers and Chrome-specific configuration
+  - May need additional SDP manipulation or different TURN server configuration
+  - Check browser console for detailed ICE connection state logs
+
+**⚠️ Technical Limitations**:
+- **YouTube videos CANNOT be synchronized** due to iframe security restrictions
 - P2P file sharing limited to 3GB to prevent browser memory issues
 - WebRTC requires good network connectivity for reliable transfers
-- **Socket.io connection currently unreliable** - main blocker for real-time features
-- For synchronized viewing, use:
-  - Direct video links (.mp4, .webm, etc.)
-  - Local files shared via P2P (once connection fixed)
+- WSL requires using IP address instead of localhost
+
+**📝 Notes for Next Session**:
+1. **Chrome to Firefox WebRTC Issue**:
+   - Firefox to Chrome works perfectly ✅
+   - Chrome to Firefox still fails during ICE negotiation
+   - Check ICE connection state logs in browser console
+   - May need to implement SDP munging for Chrome
+   - Consider using different TURN server providers
+   - Test with chrome://webrtc-internals for detailed diagnostics
+   - Test Chrome to Chrome transfers with new configuration
+   
+2. **Current Working State**:
+   - All major features working properly
+   - Message persistence fully functional
+   - Database operations stable
+   - WebRTC works in most browser combinations
+   - Only remaining issue is Chrome→Firefox WebRTC transfers

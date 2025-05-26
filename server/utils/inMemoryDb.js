@@ -3,7 +3,9 @@ import bcrypt from 'bcryptjs';
 class InMemoryDatabase {
   constructor() {
     this.users = new Map();
+    this.messages = new Map();
     this.nextId = 1;
+    this.nextMessageId = 1;
   }
 
   async createUser(userData) {
@@ -66,6 +68,74 @@ class InMemoryDatabase {
   toJSON(user) {
     const { password, ...userWithoutPassword } = user;
     return { ...userWithoutPassword, id: user._id };
+  }
+
+  // Message methods
+  async createMessage(messageData) {
+    const message = {
+      _id: this.nextMessageId.toString(),
+      ...messageData,
+      timestamp: messageData.timestamp || new Date(),
+      read: false,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    this.messages.set(message._id, message);
+    this.nextMessageId++;
+    return message;
+  }
+  
+  async getMessages(userId1, userId2, limit = 50) {
+    const messages = Array.from(this.messages.values())
+      .filter(msg => 
+        (msg.from === userId1 && msg.to === userId2) ||
+        (msg.from === userId2 && msg.to === userId1)
+      )
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+      .slice(0, limit)
+      .reverse(); // Reverse to get chronological order
+      
+    return messages;
+  }
+  
+  async getConversations(userId) {
+    const conversationMap = new Map();
+    
+    // Get all messages involving this user
+    Array.from(this.messages.values())
+      .filter(msg => msg.from === userId || msg.to === userId)
+      .forEach(msg => {
+        const otherUserId = msg.from === userId ? msg.to : msg.from;
+        if (!conversationMap.has(otherUserId)) {
+          conversationMap.set(otherUserId, {
+            userId: otherUserId,
+            lastMessage: msg,
+            unreadCount: 0
+          });
+        } else {
+          const conv = conversationMap.get(otherUserId);
+          if (new Date(msg.timestamp) > new Date(conv.lastMessage.timestamp)) {
+            conv.lastMessage = msg;
+          }
+        }
+        
+        // Count unread messages
+        if (msg.to === userId && !msg.read) {
+          conversationMap.get(otherUserId).unreadCount++;
+        }
+      });
+    
+    return Array.from(conversationMap.values());
+  }
+  
+  async markMessagesAsRead(userId, fromUserId) {
+    Array.from(this.messages.values())
+      .filter(msg => msg.to === userId && msg.from === fromUserId && !msg.read)
+      .forEach(msg => {
+        msg.read = true;
+        msg.updatedAt = new Date();
+      });
   }
 }
 

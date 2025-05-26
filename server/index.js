@@ -7,6 +7,7 @@ import mongoose from 'mongoose';
 import authRoutes from './routes/auth.js';
 import { authenticateToken } from './middleware/auth.js';
 import User from './models/User.js';
+import Message from './models/Message.js';
 import inMemoryDb from './utils/inMemoryDb.js';
 
 dotenv.config();
@@ -15,7 +16,7 @@ const app = express();
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3000",
+    origin: ["http://localhost:3000", "http://172.18.191.100:3000"],
     methods: ["GET", "POST"],
     credentials: true,
     allowedHeaders: ["authorization"]
@@ -26,8 +27,14 @@ const io = new Server(server, {
   pingInterval: 25000
 });
 
+// Add request logging middleware
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
+
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: ['http://localhost:3000', 'http://172.18.191.100:3000'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -56,6 +63,11 @@ try {
 // Make database type available to routes
 app.locals.usingMongoDB = usingMongoDB;
 
+// Test endpoint
+app.get('/api/test', (req, res) => {
+  res.json({ message: 'Server is working', timestamp: new Date() });
+});
+
 app.use('/api/auth', authRoutes);
 
 app.get('/api/health', (req, res) => {
@@ -67,6 +79,139 @@ app.get('/api/health', (req, res) => {
 });
 
 // Search users endpoint
+// Get message history between two users
+app.get('/api/messages/:userId', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const currentUserId = req.user._id || req.user.id;
+    
+    // Validate userId parameter
+    if (!userId || userId === 'undefined' || userId === 'null') {
+      return res.status(400).json({ message: 'Invalid user ID' });
+    }
+    
+    let messages;
+    if (usingMongoDB) {
+      messages = await Message.find({
+        $or: [
+          { from: currentUserId, to: userId },
+          { from: userId, to: currentUserId }
+        ]
+      })
+      .sort({ timestamp: 1 })
+      .limit(100)
+      .populate('from to', 'username email');
+    } else {
+      messages = await inMemoryDb.getMessages(currentUserId.toString(), userId);
+      // Enhance messages with user data
+      messages = messages.map(msg => {
+        const fromUser = inMemoryDb.findUserById(msg.from);
+        const toUser = inMemoryDb.findUserById(msg.to);
+        return {
+          ...msg,
+          from: fromUser ? { id: fromUser._id, username: fromUser.username, email: fromUser.email } : null,
+          to: toUser ? { id: toUser._id, username: toUser.username, email: toUser.email } : null
+        };
+      });
+    }
+    
+    res.json({ messages });
+  } catch (error) {
+    console.error('Error fetching messages:', error);
+    res.status(500).json({ message: 'Error fetching messages' });
+  }
+});
+
+// Get conversations list
+app.get('/api/conversations', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user._id || req.user.id;
+    
+    let conversations;
+    if (usingMongoDB) {
+      // Convert userId to ObjectId properly
+      const userObjectId = new mongoose.Types.ObjectId(userId);
+      
+      // Get unique conversations
+      const pipeline = [
+        {
+          $match: {
+            $or: [{ from: userObjectId }, { to: userObjectId }]
+          }
+        },
+        {
+          $sort: { timestamp: -1 }
+        },
+        {
+          $group: {
+            _id: {
+              $cond: [
+                { $eq: ['$from', userObjectId] },
+                '$to',
+                '$from'
+              ]
+            },
+            lastMessage: { $first: '$$ROOT' },
+            unreadCount: {
+              $sum: {
+                $cond: [
+                  { $and: [{ $eq: ['$to', userObjectId] }, { $eq: ['$read', false] }] },
+                  1,
+                  0
+                ]
+              }
+            }
+          }
+        },
+        {
+          $lookup: {
+            from: 'users',
+            localField: '_id',
+            foreignField: '_id',
+            as: 'user'
+          }
+        },
+        {
+          $unwind: '$user'
+        },
+        {
+          $project: {
+            user: {
+              id: '$user._id',
+              _id: '$user._id',
+              username: '$user.username',
+              email: '$user.email'
+            },
+            lastMessage: 1,
+            unreadCount: 1
+          }
+        }
+      ];
+      
+      conversations = await Message.aggregate(pipeline);
+    } else {
+      conversations = await inMemoryDb.getConversations(userId.toString());
+      // Enhance with user data
+      conversations = conversations.map(conv => {
+        const user = inMemoryDb.findUserById(conv.userId);
+        return {
+          user: user ? { id: user._id, username: user.username, email: user.email } : null,
+          lastMessage: conv.lastMessage,
+          unreadCount: conv.unreadCount
+        };
+      });
+    }
+    
+    // Filter out any conversations with null users
+    const validConversations = conversations.filter(conv => conv.user && conv.user.id);
+    
+    res.json({ conversations: validConversations });
+  } catch (error) {
+    console.error('Error fetching conversations:', error);
+    res.status(500).json({ message: 'Error fetching conversations' });
+  }
+});
+
 app.get('/api/users/search', authenticateToken, async (req, res) => {
   try {
     const { query } = req.query;
@@ -93,13 +238,15 @@ app.get('/api/users/search', authenticateToken, async (req, res) => {
 
     // Add online status from the Socket.io onlineUsers map
     const enhancedUsers = users.map(user => {
-      const userId = user.id || user._id;
+      const userId = (user.id || user._id).toString();
+      const userData = user.toJSON ? user.toJSON() : user;
       const isCurrentlyOnline = Array.from(onlineUsers.values())
-        .some(onlineUser => onlineUser.id === userId.toString());
+        .some(onlineUser => onlineUser.id === userId);
       
       return {
-        ...user,
         id: userId,
+        username: userData.username,
+        email: userData.email,
         isOnline: isCurrentlyOnline
       };
     });
@@ -399,13 +546,34 @@ io.on('connection', (socket) => {
     socket.emit('online-users', users);
   });
   
-  socket.on('private-message', (data) => {
+  socket.on('private-message', async (data) => {
     const { to, message, timestamp } = data;
     const fromUser = onlineUsers.get(socket.id);
     
     if (!fromUser) {
       console.log('User not authenticated for messaging');
       return;
+    }
+    
+    // Save message to database
+    try {
+      if (usingMongoDB) {
+        await Message.create({
+          from: fromUser.id,
+          to: to,
+          message: message,
+          timestamp: timestamp || new Date()
+        });
+      } else {
+        await inMemoryDb.createMessage({
+          from: fromUser.id,
+          to: to,
+          message: message,
+          timestamp: timestamp || new Date()
+        });
+      }
+    } catch (error) {
+      console.error('Error saving message:', error);
     }
     
     // Find recipient's socket ID
@@ -489,8 +657,8 @@ server.on('error', (error) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ Server running on port ${PORT} (all interfaces)`);
   console.log(`🌐 Frontend: http://localhost:3000`);
   console.log(`🔧 Backend: http://localhost:${PORT}`);
   console.log(`📊 Database: ${usingMongoDB ? 'MongoDB' : 'In-memory'}`);

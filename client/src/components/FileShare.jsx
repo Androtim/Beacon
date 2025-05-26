@@ -3,6 +3,11 @@ import { Upload, Download, Copy, Check, X, FileIcon, Share2, Loader } from 'luci
 import SimplePeer from 'simple-peer'
 import JSZip from 'jszip'
 
+// Detect if running in Chrome
+const isChrome = () => {
+  return /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor)
+}
+
 export default function FileShare({ socket }) {
   const [mode, setMode] = useState('idle') // idle, sharing, receiving
   const [shareCode, setShareCode] = useState('')
@@ -30,14 +35,14 @@ export default function FileShare({ socket }) {
     const reader = new FileReader()
     reader.onload = async () => {
       const chunks = []
-      const chunkSize = 64 * 1024 // 64KB chunks for better performance
+      const chunkSize = 16 * 1024 // 16KB chunks for better reliability
       const buffer = reader.result
       
       for (let i = 0; i < buffer.byteLength; i += chunkSize) {
         chunks.push(buffer.slice(i, i + chunkSize))
       }
 
-      console.log(`Sending file ${file.name}: ${chunks.length} chunks`)
+      console.log(`Sending file ${file.name}: ${chunks.length} chunks of ${chunkSize} bytes`)
       
       // Send file metadata first
       peer.send(JSON.stringify({
@@ -49,35 +54,69 @@ export default function FileShare({ socket }) {
         totalChunks: chunks.length
       }))
       
-      // Send chunks with flow control
+      // Wait a bit after metadata
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
+      // Send chunks with improved flow control
       for (let index = 0; index < chunks.length; index++) {
         try {
           const chunk = chunks[index]
-          const message = JSON.stringify({
-            type: 'file-chunk',
-            fileIndex,
-            data: Array.from(new Uint8Array(chunk)),
-            index,
-            total: chunks.length
-          })
           
-          // Wait for buffer to be ready
-          while (peer._channel && peer._channel.bufferedAmount > 65536) {
-            await new Promise(resolve => setTimeout(resolve, 50))
+          // For video/audio files, send raw binary data instead of JSON
+          if (file.type.startsWith('video/') || file.type.startsWith('audio/')) {
+            // Send chunk header
+            peer.send(JSON.stringify({
+              type: 'binary-chunk-header',
+              fileIndex,
+              index,
+              total: chunks.length,
+              size: chunk.byteLength
+            }))
+            
+            // Wait for header to be processed
+            await new Promise(resolve => setTimeout(resolve, 10))
+            
+            // Send binary data directly
+            try {
+              peer.send(chunk)
+            } catch (error) {
+              console.error(`Error sending binary chunk ${index}:`, error)
+              // Retry once
+              await new Promise(resolve => setTimeout(resolve, 50))
+              peer.send(chunk)
+            }
+          } else {
+            // For other files, use JSON encoding
+            const message = JSON.stringify({
+              type: 'file-chunk',
+              fileIndex,
+              data: Array.from(new Uint8Array(chunk)),
+              index,
+              total: chunks.length
+            })
+            peer.send(message)
           }
           
-          peer.send(message)
+          // Improved flow control
+          if (peer._channel) {
+            while (peer._channel.bufferedAmount > 16384) { // 16KB buffer limit
+              await new Promise(resolve => setTimeout(resolve, 20))
+            }
+          }
           
           // Update upload progress
           const progress = Math.round(((index + 1) / chunks.length) * 100)
           setUploadProgress(prev => ({ ...prev, [file.name]: progress }))
           
-          // Small delay every 100 chunks
-          if (index % 100 === 0) {
+          // Add delays for flow control
+          if (index % 50 === 0) {
             await new Promise(resolve => setTimeout(resolve, 10))
           }
         } catch (err) {
           console.error(`Error sending chunk ${index}:`, err)
+          // Retry the chunk
+          await new Promise(resolve => setTimeout(resolve, 100))
+          index-- // Retry this chunk
         }
       }
 
@@ -144,10 +183,30 @@ export default function FileShare({ socket }) {
   }
 
   // Copy share code
-  const copyShareCode = () => {
-    navigator.clipboard.writeText(shareCode)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  const copyShareCode = async () => {
+    try {
+      // Try using the modern clipboard API
+      await navigator.clipboard.writeText(shareCode)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      // Fallback for older browsers or permission issues
+      const textArea = document.createElement('textarea')
+      textArea.value = shareCode
+      textArea.style.position = 'fixed'
+      textArea.style.top = '-9999px'
+      document.body.appendChild(textArea)
+      textArea.select()
+      try {
+        document.execCommand('copy')
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      } catch (error) {
+        console.error('Failed to copy:', error)
+        alert(`Share code: ${shareCode}\n\nCopy this code manually.`)
+      }
+      document.body.removeChild(textArea)
+    }
   }
 
   // Cancel transfer
@@ -206,10 +265,65 @@ export default function FileShare({ socket }) {
     const handleFileShareRequest = ({ from, fileInfo }) => {
       console.log('Received file share request from:', from)
       
-      const peer = new SimplePeer({ initiator: false })
+      const peer = new SimplePeer({ 
+        initiator: false,
+        trickle: isChrome() ? true : false,  // Enable trickle for Chrome
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' },
+            // Add more STUN servers for better connectivity
+            { urls: 'stun:stun.services.mozilla.com' },
+            { urls: 'stun:stun.stunprotocol.org:3478' },
+            // Add public TURN servers for NAT traversal
+            {
+              urls: 'turn:openrelay.metered.ca:80',
+              username: 'openrelayproject',
+              credential: 'openrelayproject'
+            },
+            {
+              urls: 'turn:openrelay.metered.ca:443',
+              username: 'openrelayproject',
+              credential: 'openrelayproject'
+            }
+          ],
+          // Chrome-specific ICE configuration
+          iceTransportPolicy: 'all',
+          bundlePolicy: 'balanced',
+          rtcpMuxPolicy: 'require'
+        },
+        // Enhanced offer options for Chrome
+        offerOptions: {
+          offerToReceiveAudio: false,
+          offerToReceiveVideo: false,
+          iceRestart: true
+        },
+        // Chrome-compatible channel configuration
+        channelConfig: {
+          ordered: true,
+          maxRetransmits: 10,
+          protocol: 'file-transfer'
+        },
+        // Chrome-specific constraints
+        constraints: {
+          mandatory: {
+            OfferToReceiveAudio: false,
+            OfferToReceiveVideo: false
+          }
+        }
+      })
       peersRef.current[from] = peer
+      
+      // Log Chrome-specific debugging info
+      if (isChrome()) {
+        console.log('Chrome detected - using enhanced WebRTC configuration')
+      }
 
       peer.on('signal', signal => {
+        console.log('Sending signal to:', from, signal.type)
         socket.emit('file-share-signal', { to: from, signal })
       })
 
@@ -230,6 +344,28 @@ export default function FileShare({ socket }) {
         setSharingStatus('error')
       })
       
+      // Monitor connection state for debugging
+      peer.on('iceStateChange', (iceConnectionState, iceGatheringState) => {
+        console.log('ICE state change:', iceConnectionState, iceGatheringState)
+      })
+      
+      peer.on('connect', () => {
+        console.log('Peer connected successfully')
+      })
+      
+      // Additional debugging for Chrome
+      if (isChrome()) {
+        peer._pc.addEventListener('icecandidateerror', (event) => {
+          console.error('ICE candidate error:', event)
+        })
+        
+        peer._pc.addEventListener('icecandidate', (event) => {
+          if (event.candidate) {
+            console.log('ICE candidate:', event.candidate.type, event.candidate.protocol)
+          }
+        })
+      }
+      
       // Send ready signal
       socket.emit('file-share-ready', { to: from, fileInfo: filesRef.current })
     }
@@ -238,7 +374,56 @@ export default function FileShare({ socket }) {
     const handleFileShareReady = ({ from, fileInfo }) => {
       console.log('Host is ready to send files')
       
-      const peer = new SimplePeer({ initiator: true })
+      const peer = new SimplePeer({ 
+        initiator: true,
+        trickle: isChrome() ? true : false,  // Enable trickle for Chrome
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' },
+            // Add more STUN servers for better connectivity
+            { urls: 'stun:stun.services.mozilla.com' },
+            { urls: 'stun:stun.stunprotocol.org:3478' },
+            // Add public TURN servers for NAT traversal
+            {
+              urls: 'turn:openrelay.metered.ca:80',
+              username: 'openrelayproject',
+              credential: 'openrelayproject'
+            },
+            {
+              urls: 'turn:openrelay.metered.ca:443',
+              username: 'openrelayproject',
+              credential: 'openrelayproject'
+            }
+          ],
+          // Chrome-specific ICE configuration
+          iceTransportPolicy: 'all',
+          bundlePolicy: 'balanced',
+          rtcpMuxPolicy: 'require'
+        },
+        // Enhanced offer options for Chrome
+        offerOptions: {
+          offerToReceiveAudio: false,
+          offerToReceiveVideo: false,
+          iceRestart: true
+        },
+        // Chrome-compatible channel configuration
+        channelConfig: {
+          ordered: true,
+          maxRetransmits: 10,
+          protocol: 'file-transfer'
+        },
+        // Chrome-specific constraints
+        constraints: {
+          mandatory: {
+            OfferToReceiveAudio: false,
+            OfferToReceiveVideo: false
+          }
+        }
+      })
       peersRef.current[from] = peer
       chunksRef.current = {}
 
@@ -246,8 +431,24 @@ export default function FileShare({ socket }) {
         socket.emit('file-share-signal', { to: from, signal })
       })
 
+      let expectingBinaryChunk = null
+      
       peer.on('data', data => {
         try {
+          // Check if we're expecting binary data
+          if (expectingBinaryChunk) {
+            const fileData = chunksRef.current[expectingBinaryChunk.fileIndex]
+            if (fileData) {
+              // Store binary chunk directly
+              fileData.chunks[expectingBinaryChunk.index] = new Uint8Array(data)
+              const progress = Math.round(((expectingBinaryChunk.index + 1) / expectingBinaryChunk.total) * 100)
+              setDownloadProgress(prev => ({ ...prev, [fileData.fileName]: progress }))
+            }
+            expectingBinaryChunk = null
+            return
+          }
+          
+          // Otherwise, parse as JSON
           const message = JSON.parse(data.toString())
           
           if (message.type === 'file-meta') {
@@ -260,6 +461,10 @@ export default function FileShare({ socket }) {
               chunks: []
             }
             setDownloadProgress(prev => ({ ...prev, [message.fileName]: 0 }))
+          }
+          else if (message.type === 'binary-chunk-header') {
+            // Next data will be binary
+            expectingBinaryChunk = message
           }
           else if (message.type === 'file-chunk') {
             const fileData = chunksRef.current[message.fileIndex]
@@ -337,6 +542,28 @@ export default function FileShare({ socket }) {
         console.error('Peer error:', err)
         setSharingStatus('error')
       })
+      
+      // Monitor connection state for debugging
+      peer.on('iceStateChange', (iceConnectionState, iceGatheringState) => {
+        console.log('ICE state change:', iceConnectionState, iceGatheringState)
+      })
+      
+      peer.on('connect', () => {
+        console.log('Peer connected successfully')
+      })
+      
+      // Additional debugging for Chrome
+      if (isChrome()) {
+        peer._pc.addEventListener('icecandidateerror', (event) => {
+          console.error('ICE candidate error:', event)
+        })
+        
+        peer._pc.addEventListener('icecandidate', (event) => {
+          if (event.candidate) {
+            console.log('ICE candidate:', event.candidate.type, event.candidate.protocol)
+          }
+        })
+      }
     }
 
     // Signal handling
