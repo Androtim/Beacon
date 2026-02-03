@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../hooks/useSocket'
 import FileShare from '../components/FileShare'
-import { Plus, Video, Share2, Settings, MessageSquare, LogOut, Layout, Zap, Users } from 'lucide-react'
+import { Plus, Video, Share2, Settings, MessageSquare, LogOut, Layout, Zap, Users, Shield, Radio, ChevronRight } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -28,196 +28,193 @@ export default function Home() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden selection:bg-violet-500/30">
-      {/* Ambient Background Elements */}
-      <div className="orb w-[500px] h-[500px] bg-violet-600 top-[-200px] left-[-100px]" />
-      <div className="orb w-[400px] h-[400px] bg-cyan-500 bottom-[-100px] right-[-100px]" />
-      <div className="orb w-[300px] h-[300px] bg-purple-600 top-[40%] right-[10%] opacity-20" />
+    <div className="relative min-h-screen bg-[#0F172A] text-slate-200 selection:bg-violet-500/30 overflow-x-hidden">
+      {/* Background elements */}
+      <div className="orb w-[600px] h-[600px] bg-violet-600/10 top-[-200px] left-[-200px]" />
+      <div className="orb w-[500px] h-[500px] bg-cyan-500/10 bottom-[-100px] right-[-100px]" />
 
-      {/* Navigation */}
-      <nav className="sticky top-0 z-50 px-2 sm:px-6 py-2 sm:py-4">
-        <div className="max-w-7xl mx-auto flex justify-between items-center glass-card px-3 sm:px-6 py-2 sm:py-3 border-white/5">
-          <div className="flex items-center gap-4 sm:gap-12">
+      {/* Desktop Header */}
+      <nav className="sticky top-0 z-50 p-4 sm:p-6 lg:px-8">
+        <div className="max-w-7xl mx-auto flex justify-between items-center glass-card px-6 py-3 border-white/5 shadow-2xl">
+          <div className="flex items-center gap-12">
             <motion.div 
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="flex items-center gap-2 cursor-pointer"
-              onClick={() => navigate('/')}
+              whileHover={{ scale: 1.02 }}
+              onClick={() => setActiveTab('watch')}
+              className="flex items-center gap-2.5 cursor-pointer"
             >
-              <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-violet-500 to-cyan-400 rounded-lg flex items-center justify-center shadow-lg shadow-violet-500/20">
-                <Zap className="h-4 w-4 sm:h-5 sm:w-5 text-white" fill="currentColor" />
+              <div className="w-9 h-9 bg-gradient-to-br from-violet-500 to-cyan-400 rounded-xl flex items-center justify-center shadow-lg shadow-violet-500/20">
+                <Zap className="h-5 w-5 text-white" fill="currentColor" />
               </div>
-              <h1 className="text-lg sm:text-xl font-bold tracking-tighter text-gradient hidden xs:block">BEACON</h1>
+              <h1 className="text-xl font-bold tracking-tighter text-gradient uppercase hidden xs:block">Beacon</h1>
             </motion.div>
 
             <div className="hidden lg:flex items-center gap-1">
-              <button
-                onClick={() => setActiveTab('watch')}
-                className={`nav-item ${activeTab === 'watch' ? 'nav-item-active' : ''}`}
-              >
-                <Video className="h-4 w-4" />
-                <span>Watch Party</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('files')}
-                className={`nav-item ${activeTab === 'files' ? 'nav-item-active' : ''}`}
-              >
-                <Share2 className="h-4 w-4" />
-                <span>Transfers</span>
-              </button>
+              <NavButton active={activeTab === 'watch'} onClick={() => setActiveTab('watch')} icon={<Video size={16} />} label="Stream Sync" />
+              <NavButton active={activeTab === 'files'} onClick={() => setActiveTab('files')} icon={<Share2 size={16} />} label="Payload" />
               <Link to="/messages" className="nav-item">
-                <MessageSquare className="h-4 w-4" />
-                <span>Network</span>
+                <MessageSquare size={16} />
+                <span className="uppercase text-[10px] font-bold tracking-widest">Network</span>
               </Link>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-4">
-            <div className="hidden sm:flex flex-col items-end mr-2">
-              <span className="text-xs text-slate-500 font-medium uppercase tracking-widest">Active Operator</span>
-              <span className="text-sm font-semibold text-white">{user?.username}</span>
+          <div className="flex items-center gap-4">
+            <div className="hidden md:flex flex-col items-end mr-2">
+              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Operator Active</span>
+              <span className="text-sm font-bold text-white tracking-tight">{user?.username}</span>
             </div>
-            <Link to="/settings" className="p-2 sm:p-2.5 glass-card rounded-xl hover:bg-white/10 transition-colors">
-              <Settings className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400" />
+            <Link to="/settings" className="w-10 h-10 glass-card rounded-xl flex items-center justify-center hover:bg-white/10 transition-all border-white/5">
+              <Settings className="h-4 w-4 text-slate-400" />
             </Link>
             <button
               onClick={logout}
-              className="p-2 sm:p-2.5 glass-card rounded-xl border-red-500/20 hover:bg-red-500/10 text-red-400 transition-colors"
+              className="w-10 h-10 glass-card rounded-xl flex items-center justify-center border-red-500/20 hover:bg-red-500/10 text-red-400 transition-all"
             >
-              <LogOut className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <LogOut className="h-4 w-4" />
             </button>
           </div>
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-6 py-12 relative z-10">
-        <header className="text-center mb-16">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <span className="inline-block px-4 py-1 rounded-full bg-violet-500/10 text-violet-400 text-xs font-bold tracking-widest uppercase mb-4 border border-violet-500/20">
-              Protocol V2.0 Active
-            </span>
-            <h2 className="text-5xl md:text-6xl font-bold mb-6 tracking-tight leading-tight">
-              Synchronize your <span className="text-gradient">Experience.</span>
-            </h2>
-            <p className="text-lg text-slate-400 max-w-2xl mx-auto font-medium">
-              Enterprise-grade P2P file transfers and perfect-sync watch parties.
-              No servers, no limits, just pure connection.
-            </p>
-          </motion.div>
-        </header>
-
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-6 py-8 sm:py-16 pb-32 lg:pb-16 relative z-10">
         <AnimatePresence mode="wait">
           {activeTab === 'watch' && (
             <motion.div
               key="watch"
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto"
+              exit={{ opacity: 0, y: -10 }}
+              className="flex flex-col gap-16"
             >
-              <div className="glass-card p-10 flex flex-col items-center group">
-                <div className="w-16 h-16 bg-violet-500/10 rounded-2xl flex items-center justify-center mb-6 border border-violet-500/20 group-hover:scale-110 transition-transform duration-500">
-                  <Layout className="h-8 w-8 text-violet-400" />
-                </div>
-                <h3 className="text-2xl font-bold mb-2">Initialize Room</h3>
-                <p className="text-slate-400 text-center mb-8">
-                  Host a new encrypted session and command your squad.
-                </p>
-                <div className="w-full space-y-4">
-                  <AnimatePresence>
-                    {showCustomCode && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                      >
-                        <input
-                          type="text"
-                          placeholder="ASSIGN CUSTOM CODE"
-                          className="glass-input text-center tracking-[0.2em] font-mono"
-                          value={customCode}
-                          onChange={(e) => setCustomCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
-                          maxLength={8}
-                        />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                  <button onClick={createParty} className="w-full glass-button group">
-                    <span>CREATE PARTY</span>
-                    <Plus className="h-4 w-4 group-hover:rotate-90 transition-transform" />
-                  </button>
-                  <button
-                    onClick={() => setShowCustomCode(!showCustomCode)}
-                    className="w-full text-xs font-bold tracking-widest text-slate-500 hover:text-slate-300 transition-colors uppercase"
-                  >
-                    {showCustomCode ? '[-] Default Random Code' : '[+] Override with Custom Code'}
-                  </button>
-                </div>
-              </div>
+              <header className="text-center">
+                 <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.5 }}>
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-400 text-[10px] font-bold tracking-widest uppercase mb-6">
+                       <Radio size={12} className="animate-pulse" /> Protocol v2.4 Engaged
+                    </div>
+                    <h2 className="text-4xl sm:text-6xl font-black mb-6 tracking-tighter leading-[0.9] text-white">
+                      SYNCHRONIZE<br/><span className="text-gradient">REALITY.</span>
+                    </h2>
+                    <p className="text-slate-500 max-w-xl mx-auto text-sm sm:text-base font-medium leading-relaxed">
+                      Encrypted P2P watch parties and direct payload delivery.<br className="hidden sm:block"/> No servers. No compromise. Pure connection.
+                    </p>
+                 </motion.div>
+              </header>
 
-              <div className="glass-card p-10 flex flex-col items-center group">
-                <div className="w-16 h-16 bg-cyan-500/10 rounded-2xl flex items-center justify-center mb-6 border border-cyan-500/20 group-hover:scale-110 transition-transform duration-500">
-                  <Users className="h-8 w-8 text-cyan-400" />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto w-full">
+                <div className="glass-card p-10 flex flex-col items-center group relative overflow-hidden">
+                  <div className="absolute -top-10 -right-10 w-32 h-32 bg-violet-500/5 rounded-full blur-3xl group-hover:bg-violet-500/10 transition-colors" />
+                  <div className="w-16 h-16 bg-violet-500/10 rounded-2xl flex items-center justify-center mb-8 border border-violet-500/20 group-hover:scale-110 transition-all duration-500 shadow-lg shadow-violet-500/10">
+                    <Layout className="h-7 w-7 text-violet-400" />
+                  </div>
+                  <h3 className="text-2xl font-bold mb-3 tracking-tight">INITIALIZE</h3>
+                  <p className="text-slate-500 text-center mb-10 text-sm leading-relaxed">
+                    Host an encrypted subspace and invite your squad using secure coordinates.
+                  </p>
+                  <div className="w-full space-y-4">
+                    <AnimatePresence>
+                      {showCustomCode && (
+                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
+                          <input
+                            type="text"
+                            placeholder="ASSIGN COORDINATES"
+                            className="glass-input text-center tracking-[0.4em] font-mono text-sm"
+                            value={customCode}
+                            onChange={(e) => setCustomCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                            maxLength={8}
+                          />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                    <button onClick={createParty} className="w-full glass-button group !py-4 shadow-xl">
+                      <span>CREATE SESSION</span>
+                      <Plus className="h-4 w-4 group-hover:rotate-90 transition-transform" />
+                    </button>
+                    <button
+                      onClick={() => setShowCustomCode(!showCustomCode)}
+                      className="w-full text-[10px] font-bold tracking-widest text-slate-500 hover:text-slate-300 transition-colors uppercase"
+                    >
+                      {showCustomCode ? '[-] USE RANDOM SEED' : '[+] OVERRIDE WITH CUSTOM CODE'}
+                    </button>
+                  </div>
                 </div>
-                <h3 className="text-2xl font-bold mb-2">Intercept Session</h3>
-                <p className="text-slate-400 text-center mb-8">
-                  Enter existing coordinates to join the watch party.
-                </p>
-                <form onSubmit={joinParty} className="w-full space-y-4">
-                  <input
-                    type="text"
-                    placeholder="ENTER 8-DIGIT CODE"
-                    className="glass-input text-center tracking-[0.2em] font-mono"
-                    value={partyCode}
-                    onChange={(e) => setPartyCode(e.target.value.toUpperCase())}
-                  />
-                  <button
-                    type="submit"
-                    disabled={!partyCode.trim()}
-                    className="w-full glass-button !from-cyan-500 !to-cyan-400 shadow-cyan-500/20 disabled:opacity-30"
-                  >
-                    <span>JOIN EXPEDITION</span>
-                  </button>
-                </form>
+
+                <div className="glass-card p-10 flex flex-col items-center group relative overflow-hidden">
+                  <div className="absolute -top-10 -right-10 w-32 h-32 bg-cyan-500/5 rounded-full blur-3xl group-hover:bg-cyan-500/10 transition-colors" />
+                  <div className="w-16 h-16 bg-cyan-500/10 rounded-2xl flex items-center justify-center mb-8 border border-cyan-500/20 group-hover:scale-110 transition-all duration-500 shadow-lg shadow-cyan-500/10">
+                    <Users className="h-7 w-7 text-cyan-400" />
+                  </div>
+                  <h3 className="text-2xl font-bold mb-3 tracking-tight">INTERCEPT</h3>
+                  <p className="text-slate-500 text-center mb-10 text-sm leading-relaxed">
+                    Enter session coordinates to join an active point-to-point stream.
+                  </p>
+                  <form onSubmit={joinParty} className="w-full space-y-4">
+                    <input
+                      type="text"
+                      placeholder="ENTER 8-DIGIT CODE"
+                      className="glass-input text-center tracking-[0.4em] font-mono text-sm"
+                      value={partyCode}
+                      onChange={(e) => setPartyCode(e.target.value.toUpperCase())}
+                    />
+                    <button
+                      type="submit"
+                      disabled={!partyCode.trim()}
+                      className="w-full glass-button !from-cyan-500 !to-cyan-400 shadow-xl disabled:opacity-30 !py-4"
+                    >
+                      <span>ESTABLISH LINK</span>
+                      <ChevronRight size={16} />
+                    </button>
+                  </form>
+                </div>
               </div>
             </motion.div>
           )}
 
           {activeTab === 'files' && (
-            <motion.div
-              key="files"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="max-w-4xl mx-auto"
-            >
-              <div className="glass-card p-2 overflow-hidden">
-                 <FileShare socket={socket} />
-              </div>
+            <motion.div key="files" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }} className="max-w-5xl mx-auto w-full">
+               <div className="glass-card overflow-hidden">
+                  <FileShare socket={socket} />
+               </div>
             </motion.div>
           )}
         </AnimatePresence>
-
-        {/* Footer info */}
-        <footer className="mt-20 flex flex-wrap justify-center gap-12 border-t border-white/5 pt-12">
-            <div className="flex flex-col items-center gap-1">
-                <span className="text-2xl font-bold text-white">100%</span>
-                <span className="text-xs uppercase tracking-widest text-slate-500 font-bold">P2P Encryption</span>
-            </div>
-            <div className="flex flex-col items-center gap-1">
-                <span className="text-2xl font-bold text-white">0.0ms</span>
-                <span className="text-xs uppercase tracking-widest text-slate-500 font-bold">Latency Sync</span>
-            </div>
-            <div className="flex flex-col items-center gap-1">
-                <span className="text-2xl font-bold text-white">∞</span>
-                <span className="text-xs uppercase tracking-widest text-slate-500 font-bold">Bandwidth Cap</span>
-            </div>
-        </footer>
       </main>
+
+      {/* Mobile Bottom Nav */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden p-4 pointer-events-none">
+         <div className="max-w-md mx-auto glass-card flex items-center justify-around p-2 pointer-events-auto border-white/10 shadow-2xl">
+            <MobileNavButton active={activeTab === 'watch'} onClick={() => setActiveTab('watch')} icon={<Video size={20} />} label="Stream" />
+            <MobileNavButton active={activeTab === 'files'} onClick={() => setActiveTab('files')} icon={<Share2 size={20} />} label="Payload" />
+            <Link to="/messages" className="flex flex-col items-center justify-center gap-1 p-3 rounded-2xl transition-all text-slate-500 hover:text-white">
+               <MessageSquare size={20} />
+               <span className="text-[9px] font-bold uppercase tracking-widest">Network</span>
+            </Link>
+         </div>
+      </div>
     </div>
+  )
+}
+
+function NavButton({ active, onClick, icon, label }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`nav-item ${active ? 'nav-item-active' : ''}`}
+    >
+      {icon}
+      <span>{label.toUpperCase()}</span>
+    </button>
+  )
+}
+
+function MobileNavButton({ active, onClick, icon, label }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex flex-col items-center justify-center gap-1 p-3 rounded-2xl transition-all ${active ? 'bg-violet-500/10 text-violet-400' : 'text-slate-500 hover:text-white'}`}
+    >
+      {icon}
+      <span className="text-[9px] font-bold uppercase tracking-widest">{label}</span>
+    </button>
   )
 }

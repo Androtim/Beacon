@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../hooks/useSocket'
-import { Send, User, Search, Circle, ArrowLeft, Loader } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Send, User, Search, Circle, ArrowLeft, Loader, Video, MessageSquare, Zap, Shield, Plus, ChevronRight, Settings, LogOut } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import axios from 'axios'
 
 export default function Messages() {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const socket = useSocket()
+  const navigate = useNavigate()
   const [searchResults, setSearchResults] = useState([])
   const [selectedUser, setSelectedUser] = useState(null)
   const [messages, setMessages] = useState({})
@@ -15,478 +17,180 @@ export default function Messages() {
   const [searchQuery, setSearchQuery] = useState('')
   const [isSearching, setIsSearching] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
-  const [conversations, setConversations] = useState([]) // Users we have conversations with
-  const [loadingMessages, setLoadingMessages] = useState(false)
+  const [conversations, setConversations] = useState([]) 
   const [loadingConversations, setLoadingConversations] = useState(true)
   const messagesEndRef = useRef(null)
   const searchTimeoutRef = useRef(null)
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
+  const scrollToBottom = () => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }
 
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages, selectedUser])
+  useEffect(() => { scrollToBottom() }, [messages, selectedUser])
   
-  // Load conversations on mount
   useEffect(() => {
     const loadConversations = async () => {
       try {
-        const token = localStorage.getItem('token')
-        const response = await axios.get(`${axios.defaults.baseURL}/api/conversations`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        
-        // Convert conversations to user format for display
-        const convUsers = response.data.conversations.map(conv => ({
-          ...conv.user,
-          lastMessage: conv.lastMessage,
-          unreadCount: conv.unreadCount
+        const res = await axios.get('/api/conversations')
+        const convUsers = res.data.conversations.map(c => ({ 
+          id: c.user.id || c.user._id,
+          username: c.user.username,
+          lastMessage: c.lastMessage, 
+          unreadCount: c.unreadCount 
         }))
-        
         setConversations(convUsers)
-        
-        // Also load messages for each conversation to populate the messages state
-        const messagePromises = convUsers.map(async (convUser) => {
-          // Skip if user ID is undefined
-          if (!convUser.id || convUser.id === 'undefined') {
-            console.warn('Skipping user with undefined ID:', convUser)
-            return { userId: convUser.id, messages: [] }
-          }
-          
-          try {
-            const msgResponse = await axios.get(`${axios.defaults.baseURL}/api/messages/${convUser.id}`, {
-              headers: { Authorization: `Bearer ${token}` }
-            })
-            
-            const formattedMessages = msgResponse.data.messages.map(msg => ({
-              from: msg.from,
-              to: msg.to,
-              message: msg.message,
-              timestamp: msg.timestamp,
-              isOwn: msg.from.id === user.id
-            }))
-            
-            return { userId: convUser.id, messages: formattedMessages }
-          } catch (error) {
-            console.error(`Error loading messages for user ${convUser.id}:`, error)
-            return { userId: convUser.id, messages: [] }
-          }
-        })
-        
-        const messagesData = await Promise.all(messagePromises)
-        const messagesMap = {}
-        messagesData.forEach(({ userId, messages }) => {
-          messagesMap[userId] = messages
-        })
-        
-        setMessages(messagesMap)
-      } catch (error) {
-        console.error('Error loading conversations:', error)
-      } finally {
-        setLoadingConversations(false)
-      }
+      } catch (e) { console.error(e) } finally { setLoadingConversations(false) }
     }
-    
-    if (user?.id) {
-      loadConversations()
-    }
+    if (user?.id) loadConversations()
   }, [user])
   
-  // Load message history when selecting a user
   useEffect(() => {
-    if (!selectedUser) return
-    
-    const loadMessageHistory = async () => {
-      setLoadingMessages(true)
-      try {
-        const token = localStorage.getItem('token')
-        const response = await axios.get(`${axios.defaults.baseURL}/api/messages/${selectedUser.id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        
-        // Convert messages to the expected format
-        const formattedMessages = response.data.messages.map(msg => ({
-          from: msg.from,
-          to: msg.to,
-          message: msg.message,
-          timestamp: msg.timestamp,
-          isOwn: msg.from.id === user.id
-        }))
-        
-        setMessages(prev => ({
-          ...prev,
-          [selectedUser.id]: formattedMessages
-        }))
-      } catch (error) {
-        console.error('Error loading message history:', error)
-      } finally {
-        setLoadingMessages(false)
-      }
-    }
-    
-    loadMessageHistory()
-  }, [selectedUser, user.id])
-
-  // Search for users when query changes
-  useEffect(() => {
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current)
-    }
-
-    if (!searchQuery.trim()) {
-      setSearchResults([])
-      setHasSearched(false)
-      return
-    }
-
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
+    if (!searchQuery.trim()) { setSearchResults([]); setHasSearched(false); return }
     searchTimeoutRef.current = setTimeout(async () => {
       setIsSearching(true)
       try {
-        const token = localStorage.getItem('token')
-        console.log('🔍 Searching for users with query:', searchQuery)
-        if (!token) {
-          console.error('❌ No token found in localStorage')
-          return
-        }
-        const response = await axios.get(`/api/users/search?query=${searchQuery}`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        })
-        console.log('✅ Search results:', response.data)
-        setSearchResults(response.data.users.filter(u => u.id !== user.id))
+        const res = await axios.get(`/api/users/search?query=${searchQuery}`)
+        setSearchResults(res.data.users
+          .map(u => ({ ...u, id: u.id || u._id }))
+          .filter(u => u.id !== user.id)
+        )
         setHasSearched(true)
-      } catch (error) {
-        console.error('Error searching users:', error)
-        setSearchResults([])
-      } finally {
-        setIsSearching(false)
-      }
-    }, 500) // Debounce search
-
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current)
-      }
-    }
+      } catch (e) { setSearchResults([]) } finally { setIsSearching(false) }
+    }, 500)
   }, [searchQuery, user.id])
 
   useEffect(() => {
     if (!socket) return
-
-    // Listen for new messages
     socket.on('private-message', ({ from, message, timestamp }) => {
-      setMessages(prev => ({
-        ...prev,
-        [from.id]: [
-          ...(prev[from.id] || []),
-          {
-            from: from,
-            message,
-            timestamp,
-            isOwn: false
-          }
-        ]
-      }))
-
-      // Add sender to conversations if not already there
+      const fromId = from.id || from._id
+      setMessages(prev => ({ ...prev, [fromId]: [...(prev[fromId] || []), { from, message, timestamp, isOwn: false }] }))
       setConversations(prev => {
-        const exists = prev.find(u => u.id === from.id)
-        if (!exists) {
-          return [...prev, from]
-        }
+        if (!prev.find(u => u.id === fromId)) return [...prev, { ...from, id: fromId }]
         return prev
       })
     })
-
-    // Listen for user status changes
-    socket.on('user-online', (onlineUser) => {
-      if (onlineUser.id !== user.id) {
-        // Update search results if they contain this user
-        setSearchResults(prev => 
-          prev.map(u => u.id === onlineUser.id ? { ...u, isOnline: true } : u)
-        )
-        // Update conversations if they contain this user
-        setConversations(prev => 
-          prev.map(u => u.id === onlineUser.id ? { ...u, isOnline: true } : u)
-        )
-      }
-    })
-
-    socket.on('user-offline', (userId) => {
-      // Update search results if they contain this user
-      setSearchResults(prev => 
-        prev.map(u => u.id === userId ? { ...u, isOnline: false } : u)
-      )
-      // Update conversations if they contain this user
-      setConversations(prev => 
-        prev.map(u => u.id === userId ? { ...u, isOnline: false } : u)
-      )
-    })
-
-    return () => {
-      socket.off('private-message')
-      socket.off('user-online')
-      socket.off('user-offline')
-    }
-  }, [socket, user, conversations])
+    return () => { socket.off('private-message') }
+  }, [socket])
 
   const sendMessage = (e) => {
-    e.preventDefault()
+    if (e) e.preventDefault()
     if (!newMessage.trim() || !selectedUser) return
-
-    const messageData = {
-      to: selectedUser.id,
-      message: newMessage,
-      timestamp: Date.now()
-    }
-
-    // Send message via socket
-    socket.emit('private-message', messageData)
-
-    // Add to local messages
-    setMessages(prev => ({
-      ...prev,
-      [selectedUser.id]: [
-        ...(prev[selectedUser.id] || []),
-        {
-          from: user,
-          message: newMessage,
-          timestamp: messageData.timestamp,
-          isOwn: true
-        }
-      ]
-    }))
-
-    // Add user to conversations if not already there
-    if (!conversations.find(u => u.id === selectedUser.id)) {
-      setConversations(prev => [...prev, selectedUser])
-    }
-
+    const timestamp = Date.now()
+    socket.emit('private-message', { to: selectedUser.id, message: newMessage, timestamp })
+    setMessages(prev => ({ ...prev, [selectedUser.id]: [...(prev[selectedUser.id] || []), { from: user, message: newMessage, timestamp, isOwn: true }] }))
+    if (!conversations.find(u => u.id === selectedUser.id)) setConversations(prev => [...prev, selectedUser])
     setNewMessage('')
   }
 
-  const formatTime = (timestamp) => {
-    const date = new Date(timestamp)
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const startWatchParty = () => {
+    const code = `OP-${Math.random().toString(36).substring(2, 6).toUpperCase()}`
+    const invite = `📡 OPERATOR INVITE: Establish Sync Coordinates. Link: ${code}`
+    socket.emit('private-message', { to: selectedUser.id, message: invite, timestamp: Date.now() })
+    setMessages(prev => ({ ...prev, [selectedUser.id]: [...(prev[selectedUser.id] || []), { from: user, message: invite, timestamp: Date.now(), isOwn: true }] }))
+    navigate(`/party/${code}`)
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white">
-      <div className="container mx-auto h-screen flex flex-col">
-        {/* Header */}
-        <div className="bg-white dark:bg-gray-800 p-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-4">
-            <Link to="/" className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-              <ArrowLeft size={20} />
-            </Link>
-            <h1 className="text-2xl font-bold">Messages</h1>
-          </div>
-        </div>
+  const formatTime = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
-        <div className="flex-1 flex overflow-hidden">
-          {/* Sidebar - User List */}
-          <div className="w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
-            {/* Search */}
-            <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500 dark:text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search by username..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white pl-10 pr-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                {isSearching && (
-                  <Loader className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500 dark:text-gray-400 animate-spin" />
+  return (
+    <div className="min-h-screen relative overflow-hidden bg-[#0F172A] text-slate-200 selection:bg-violet-500/30">
+      <div className="orb w-[500px] h-[500px] bg-violet-600/10 top-[-200px] left-[-100px]" />
+      <div className="orb w-[400px] h-[400px] bg-cyan-500/10 bottom-[-100px] right-[-100px]" />
+
+      <div className="max-w-7xl mx-auto h-[100dvh] flex flex-col relative z-10 p-4 sm:p-6 lg:px-8">
+        <header className="glass-card px-6 py-4 flex items-center justify-between mb-6 border-white/5 shrink-0">
+          <div className="flex items-center gap-6">
+            <Link to="/" className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center hover:bg-white/10 border border-white/5 transition-all"><ArrowLeft className="h-5 w-5 text-slate-400" /></Link>
+            <div className="h-8 w-px bg-white/10 hidden sm:block" />
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-gradient-to-br from-violet-500 to-cyan-400 rounded-xl flex items-center justify-center shadow-lg shadow-violet-500/20"><MessageSquare className="h-5 w-5 text-white" /></div>
+              <h1 className="text-xl font-bold tracking-tighter text-white uppercase">Network Comms</h1>
+            </div>
+          </div>
+        </header>
+
+        <div className="flex-1 flex gap-6 min-h-0 overflow-hidden">
+          <aside className={`w-full lg:w-80 shrink-0 flex flex-col gap-6 ${selectedUser ? 'hidden lg:flex' : 'flex'}`}>
+            <div className="glass-card flex-1 flex flex-col overflow-hidden border-white/5 shadow-xl">
+              <div className="p-4 border-b border-white/5 bg-white/5">
+                <div className="relative group">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-focus-within:text-violet-400 transition-colors" />
+                  <input type="text" placeholder="SCAN OPERATORS..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="glass-input !pl-10 !py-3 text-[10px] font-mono uppercase tracking-widest" />
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
+                {searchQuery ? (
+                  <div className="animate-in fade-in slide-in-from-top-1 duration-300">
+                    <div className="px-5 py-3 text-[9px] font-bold text-slate-500 uppercase tracking-[0.3em] bg-white/5">Scan Results</div>
+                    {searchResults.map(u => ( <UserItem key={u.id} user={u} active={selectedUser?.id === u.id} onClick={() => setSelectedUser(u)} /> ))}
+                  </div>
+                ) : (
+                  <div className="animate-in fade-in duration-500">
+                    <div className="px-5 py-3 text-[9px] font-bold text-slate-500 uppercase tracking-[0.3em] bg-white/5">Active Links</div>
+                    {loadingConversations ? ( <div className="p-8 text-center"><Loader className="h-6 w-6 text-violet-500 animate-spin mx-auto" /></div>
+                    ) : conversations.length > 0 ? ( conversations.map(u => ( <UserItem key={u.id} user={u} active={selectedUser?.id === u.id} onClick={() => setSelectedUser(u)} /> ))
+                    ) : ( <div className="p-10 text-center opacity-30"><Shield className="h-10 w-10 mx-auto mb-4" /><p className="text-[10px] font-bold uppercase tracking-widest">No Active Sessions</p></div> )}
+                  </div>
                 )}
               </div>
             </div>
+          </aside>
 
-            {/* Search Results */}
-            {searchQuery && (
-              <div className="border-b border-gray-200 dark:border-gray-700">
-                <div className="p-2 text-sm font-medium text-gray-600 dark:text-gray-400">Search Results</div>
-                <div className="max-h-64 overflow-y-auto">
-                  {isSearching ? (
-                    <div className="text-center text-gray-500 dark:text-gray-400 p-4">
-                      <Loader className="h-5 w-5 animate-spin mx-auto" />
-                    </div>
-                  ) : searchResults.length === 0 && hasSearched ? (
-                    <div className="text-center text-gray-500 dark:text-gray-400 p-4">
-                      <p>No users found</p>
-                    </div>
-                  ) : (
-                    searchResults.map((u) => (
-                      <div
-                        key={u.id}
-                        onClick={() => setSelectedUser(u)}
-                        className={`flex items-center p-4 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors ${
-                          selectedUser?.id === u.id ? 'bg-gray-100 dark:bg-gray-700' : ''
-                        }`}
-                      >
-                        <div className="relative mr-3">
-                          <div className="w-10 h-10 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center">
-                            <User className="h-5 w-5 text-gray-600 dark:text-gray-300" />
-                          </div>
-                          <Circle
-                            className={`absolute bottom-0 right-0 h-3 w-3 ${
-                              u.isOnline ? 'text-green-500 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'
-                            } fill-current`}
-                          />
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-medium text-gray-900 dark:text-white">{u.username}</p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">
-                            {u.isOnline ? 'Online' : 'Offline'}
-                          </p>
-                        </div>
-                        {messages[u.id]?.filter(m => !m.isOwn).length > 0 && (
-                          <div className="bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                            {messages[u.id].filter(m => !m.isOwn).length}
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Conversations */}
-            <div className="flex-1 overflow-y-auto">
-              {loadingConversations ? (
-                <div className="text-center text-gray-500 dark:text-gray-400 p-4">
-                  <Loader className="h-5 w-5 animate-spin mx-auto mb-2" />
-                  <p>Loading conversations...</p>
-                </div>
-              ) : conversations.length > 0 ? (
-                <>
-                  <div className="p-2 text-sm font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">Conversations</div>
-                  {conversations.map((u) => (
-                    <div
-                      key={u.id}
-                      onClick={() => setSelectedUser(u)}
-                      className={`flex items-center p-4 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors ${
-                        selectedUser?.id === u.id ? 'bg-gray-100 dark:bg-gray-700' : ''
-                      }`}
-                    >
-                      <div className="relative mr-3">
-                        <div className="w-10 h-10 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center">
-                          <User className="h-5 w-5 text-gray-600 dark:text-gray-300" />
-                        </div>
-                        <Circle
-                          className={`absolute bottom-0 right-0 h-3 w-3 ${
-                            u.isOnline ? 'text-green-500 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'
-                          } fill-current`}
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-900 dark:text-white">{u.username}</p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {u.isOnline ? 'Online' : 'Offline'}
-                        </p>
-                      </div>
-                      {messages[u.id]?.filter(m => !m.isOwn).length > 0 && (
-                        <div className="bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                          {messages[u.id].filter(m => !m.isOwn).length}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </>
-              ) : (
-                <div className="text-center text-gray-500 dark:text-gray-400 p-4">
-                  <p>No conversations yet</p>
-                  <p className="text-sm mt-2">Search for users to start chatting</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Chat Area */}
-          <div className="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900">
+          <main className={`flex-1 flex flex-col min-w-0 ${selectedUser ? 'flex' : 'hidden lg:flex'}`}>
             {selectedUser ? (
-              <>
-                {/* Chat Header */}
-                <div className="bg-white dark:bg-gray-800 p-4 border-b border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center">
-                    <div className="relative mr-3">
-                      <div className="w-10 h-10 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center">
-                        <User className="h-5 w-5 text-gray-600 dark:text-gray-300" />
-                      </div>
-                      <Circle
-                        className={`absolute bottom-0 right-0 h-3 w-3 ${
-                          selectedUser.isOnline ? 'text-green-500 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'
-                        } fill-current`}
-                      />
+              <div className="glass-card flex-1 flex flex-col overflow-hidden border-white/5 shadow-2xl">
+                <div className="px-6 py-4 border-b border-white/5 bg-white/5 flex items-center justify-between shadow-sm">
+                  <div className="flex items-center gap-4">
+                    <button onClick={() => setSelectedUser(null)} className="lg:hidden p-2 hover:bg-white/5 rounded-xl mr-2 border border-white/5"><ArrowLeft size={18} /></button>
+                    <div className="relative">
+                      <div className="w-11 h-11 bg-gradient-to-br from-violet-500/20 to-cyan-500/20 rounded-xl flex items-center justify-center border border-white/10"><User className="h-5 w-5 text-violet-400" /></div>
+                      <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-4 border-[#0F172A] ${selectedUser.isOnline ? 'bg-green-500' : 'bg-slate-600'}`} />
                     </div>
-                    <div>
-                      <p className="font-medium text-gray-900 dark:text-white">{selectedUser.username}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {selectedUser.isOnline ? 'Online' : 'Offline'}
-                      </p>
-                    </div>
+                    <div><p className="font-bold text-white uppercase tracking-tighter text-lg">{selectedUser.username}</p><p className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.2em]">{selectedUser.isOnline ? 'Link Active' : 'Offline'}</p></div>
                   </div>
+                  <button onClick={startWatchParty} className="glass-button !py-2.5 !px-5 !from-violet-600 !to-violet-500 text-[10px] tracking-[0.2em] shadow-lg shadow-violet-500/20"><Video size={14} className="mr-2" /> INITIALIZE PARTY</button>
                 </div>
-
-                {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                  {messages[selectedUser.id]?.map((msg, index) => (
-                    <div
-                      key={`${msg.timestamp}-${msg.from.id || index}`}
-                      className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div
-                        className={`max-w-xs md:max-w-md px-4 py-2 rounded-lg ${
-                          msg.isOwn
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
-                        }`}
-                      >
-                        <p className="break-words">{msg.message}</p>
-                        <p className="text-xs opacity-70 mt-1">
-                          {formatTime(msg.timestamp)}
-                        </p>
+                <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-black/20 custom-scrollbar">
+                  {messages[selectedUser.id]?.map((msg, i) => (
+                    <div key={i} className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[85%] group flex flex-col ${msg.isOwn ? 'items-end' : 'items-start'}`}>
+                        <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-lg ${msg.isOwn ? 'bg-gradient-to-br from-violet-600 to-violet-500 text-white rounded-tr-none shadow-violet-900/20' : 'bg-white/5 text-slate-200 rounded-tl-none border border-white/5'}`}>
+                           <p className="whitespace-pre-wrap">{msg.message}</p>
+                        </div>
+                        <span className="text-[8px] font-mono text-slate-600 mt-1.5 px-1 opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-widest">{formatTime(msg.timestamp)}</span>
                       </div>
                     </div>
                   ))}
                   <div ref={messagesEndRef} />
                 </div>
-
-                {/* Message Input */}
-                <form onSubmit={sendMessage} className="p-4 border-t border-gray-200 dark:border-gray-700">
-                  <div className="flex space-x-2">
-                    <input
-                      type="text"
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      placeholder="Type a message..."
-                      className="flex-1 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!newMessage.trim()}
-                      className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed text-white p-2 rounded-lg transition-colors"
-                    >
-                      <Send className="h-5 w-5" />
-                    </button>
-                  </div>
+                <form onSubmit={sendMessage} className="p-5 bg-white/5 border-t border-white/5 flex gap-4">
+                  <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="ENTER COMMAND..." className="flex-1 glass-input !py-4 !px-6 text-sm font-medium tracking-wide" />
+                  <button type="submit" disabled={!newMessage.trim()} className="w-14 h-14 glass-button !from-cyan-500 !to-cyan-400 shadow-cyan-500/20 active:scale-95 transition-transform"><Send size={22} /></button>
                 </form>
-              </>
+              </div>
             ) : (
-              <div className="flex-1 flex items-center justify-center">
-                <div className="text-center text-gray-500 dark:text-gray-400">
-                  <User className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                  <p className="text-xl">Search for a user to start messaging</p>
-                </div>
+              <div className="glass-card flex-1 flex flex-col items-center justify-center text-center p-12 border-white/5">
+                <Zap className="h-12 w-12 text-slate-700 animate-pulse mb-6" />
+                <h3 className="text-2xl font-bold text-white uppercase tracking-tight">Operator Directory</h3>
+                <p className="text-slate-500 max-w-sm mx-auto text-sm leading-relaxed mt-4">Select a network operator from the directory or scan the network to establish a link.</p>
               </div>
             )}
-          </div>
+          </main>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function UserItem({ user, active, onClick }) {
+  return (
+    <div onClick={onClick} className={`group flex items-center p-5 hover:bg-white/5 cursor-pointer transition-all border-l-2 ${active ? 'bg-white/5 border-violet-500' : 'border-transparent'}`}>
+      <div className="relative mr-5">
+        <div className={`w-11 h-11 bg-white/5 rounded-xl flex items-center justify-center border transition-all duration-300 ${active ? 'border-violet-500/50 shadow-lg' : 'border-white/5'}`}><User className={`h-5 w-5 ${active ? 'text-violet-400' : 'text-slate-500 group-hover:text-slate-300'}`} /></div>
+        <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#0F172A] ${user.isOnline ? 'bg-green-500' : 'bg-slate-600'}`} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className={`font-bold truncate text-sm uppercase tracking-tight transition-colors ${active ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>{user.username}</p>
+        <p className="text-[9px] text-slate-600 font-bold uppercase tracking-widest mt-1">{user.isOnline ? 'Online' : 'Offline'}</p>
       </div>
     </div>
   )

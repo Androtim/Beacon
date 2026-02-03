@@ -16,7 +16,8 @@ export default defineConfig({
   ],
   server: {
     port: 3000,
-    allowedHosts: ['wisconsin-geneva-uri-mirrors.trycloudflare.com'],
+    strictPort: true,
+    allowedHosts: ['missile-sally-marijuana-delivers.trycloudflare.com'],
     proxy: {
       '/api': {
         target: 'http://localhost:3001',

@@ -23,7 +23,7 @@ const app = express();
 const server = createServer(app);
 
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://172.18.191.100:3000'],
+  origin: true, // Allow all origins in development for tunnel compatibility
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
