@@ -12,13 +12,35 @@ export function useWatchParty(roomId, user) {
     duration: 0,
     url: null
   })
+  const [fileShare, setFileShare] = useState(null)
+
+  const [serverOffset, setServerOffset] = useState(0)
+
+  // Clock Synchronization Protocol
+  const syncClock = useCallback(() => {
+    if (!socket) return
+    const start = Date.now()
+    socket.emit('get-server-time', (serverTime) => {
+      const end = Date.now()
+      const rtt = end - start
+      const offset = serverTime - (end - rtt / 2)
+      setServerOffset(offset)
+      console.log(`⏱️ Clock sync: RTT=${rtt}ms, Offset=${offset}ms`)
+    })
+  }, [socket])
+
+  // Get current synchronized time
+  const getSyncedTime = useCallback(() => Date.now() + serverOffset, [serverOffset])
 
   // Join room on mount
   useEffect(() => {
     if (!socket || !roomId || !user) {
-      console.log('⏳ Not ready to join room:', { socket: !!socket, roomId, user: !!user })
       return
     }
+
+    // Initial clock sync
+    syncClock()
+    const syncInterval = setInterval(syncClock, 30000) // Re-sync every 30s
 
     console.log('🏠 Joining room:', roomId, 'as user:', user.username)
     socket.emit('join-room', {
@@ -30,23 +52,23 @@ export function useWatchParty(roomId, user) {
     })
 
     return () => {
+      clearInterval(syncInterval)
       socket.emit('leave-room', { roomId, userId: user.id })
     }
-  }, [socket, roomId, user])
+  }, [socket, roomId, user, syncClock])
 
   // Set up socket event listeners
   useEffect(() => {
-    if (!socket) {
-      console.log('⏳ WatchParty: Waiting for socket connection')
-      return
-    }
-    console.log('🎬 WatchParty: Setting up socket listeners')
+    if (!socket) return
 
     // Room events
     socket.on('room-joined', (data) => {
       setParticipants(data.participants)
       setIsHost(data.isHost)
       setVideoState(data.videoState)
+      if (data.fileShare) {
+        setFileShare(data.fileShare)
+      }
     })
 
     socket.on('user-joined', (data) => {
@@ -73,7 +95,17 @@ export function useWatchParty(roomId, user) {
     })
 
     socket.on('video-play', (data) => {
-      setVideoState(prev => ({ ...prev, isPlaying: true, currentTime: data.currentTime }))
+      // Latency compensation
+      const now = getSyncedTime()
+      const latency = now - data.timestamp
+      const compensatedTime = data.currentTime + (latency / 1000)
+      
+      console.log(`🎬 Received play: latency=${latency}ms, compensatedTime=${compensatedTime}`)
+      setVideoState(prev => ({ 
+        ...prev, 
+        isPlaying: true, 
+        currentTime: compensatedTime 
+      }))
     })
 
     socket.on('video-pause', (data) => {
@@ -104,7 +136,7 @@ export function useWatchParty(roomId, user) {
       socket.off('video-seek')
       socket.off('chat-message')
     }
-  }, [socket])
+  }, [socket, getSyncedTime])
 
   // Video control functions
   const setVideoUrl = useCallback((url) => {
@@ -114,18 +146,30 @@ export function useWatchParty(roomId, user) {
 
   const playVideo = useCallback((currentTime) => {
     if (!socket || !roomId) return
-    socket.emit('video-play', { roomId, currentTime })
-  }, [socket, roomId])
+    socket.emit('video-play', { 
+      roomId, 
+      currentTime, 
+      timestamp: getSyncedTime() 
+    })
+  }, [socket, roomId, getSyncedTime])
 
   const pauseVideo = useCallback((currentTime) => {
     if (!socket || !roomId) return
-    socket.emit('video-pause', { roomId, currentTime })
-  }, [socket, roomId])
+    socket.emit('video-pause', { 
+      roomId, 
+      currentTime, 
+      timestamp: getSyncedTime() 
+    })
+  }, [socket, roomId, getSyncedTime])
 
   const seekVideo = useCallback((currentTime) => {
     if (!socket || !roomId) return
-    socket.emit('video-seek', { roomId, currentTime })
-  }, [socket, roomId])
+    socket.emit('video-seek', { 
+      roomId, 
+      currentTime, 
+      timestamp: getSyncedTime() 
+    })
+  }, [socket, roomId, getSyncedTime])
 
   const sendMessage = useCallback((message) => {
     if (!socket || !roomId || !user) return
@@ -142,12 +186,13 @@ export function useWatchParty(roomId, user) {
     isHost,
     messages,
     videoState,
+    fileShare,
     setVideoUrl,
     playVideo,
     pauseVideo,
     seekVideo,
     sendMessage,
     connected: socket?.connectionStatus || false,
-    socket // Return the socket instance that joined the room
+    socket 
   }
 }

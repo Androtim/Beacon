@@ -5,8 +5,10 @@ import db from '../utils/inMemoryDb.js';
 
 const router = express.Router();
 
-const generateToken = (userId) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '7d' });
+const generateToken = (user) => {
+  const userId = user._id || user.id;
+  const username = user.username;
+  return jwt.sign({ userId, username }, process.env.JWT_SECRET, { expiresIn: '7d' });
 };
 
 const authenticateToken = async (req, res, next) => {
@@ -67,7 +69,7 @@ router.post('/signup', async (req, res) => {
 
       user = new User({ username, email, password });
       await user.save();
-      token = generateToken(user._id);
+      token = generateToken(user);
 
       res.status(201).json({
         message: 'Account created successfully',
@@ -76,7 +78,7 @@ router.post('/signup', async (req, res) => {
       });
     } else {
       user = await db.createUser({ username, email, password });
-      token = generateToken(user._id);
+      token = generateToken(user);
 
       res.status(201).json({
         message: 'Account created successfully',
@@ -119,7 +121,7 @@ router.post('/login', async (req, res) => {
       user.lastSeen = new Date();
       await user.save();
 
-      const token = generateToken(user._id);
+      const token = generateToken(user);
       res.json({
         message: 'Login successful',
         token,
@@ -137,7 +139,7 @@ router.post('/login', async (req, res) => {
       }
 
       await db.updateUser(user._id, { isOnline: true, lastSeen: new Date() });
-      const token = generateToken(user._id);
+      const token = generateToken(user);
 
       res.json({
         message: 'Login successful',

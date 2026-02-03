@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import inMemoryDb from '../utils/inMemoryDb.js';
 
 export const authenticateToken = async (req, res, next) => {
   try {
@@ -11,7 +12,17 @@ export const authenticateToken = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.userId);
+    
+    // In express middleware, req.app is usually available
+    // But in some contexts it might not be, so we check
+    const usingMongoDB = req.app ? req.app.locals.usingMongoDB : !!mongoose.connection.readyState;
+    
+    let user;
+    if (usingMongoDB) {
+      user = await User.findById(decoded.userId);
+    } else {
+      user = await inMemoryDb.findUserById(decoded.userId);
+    }
 
     if (!user) {
       return res.status(401).json({ message: 'User not found' });

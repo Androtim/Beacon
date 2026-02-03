@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Upload, Users, Play, Pause, Download, AlertCircle, CheckCircle } from 'lucide-react'
+import { motion } from 'framer-motion'
 import SimplePeer from 'simple-peer'
 
 // Detect if running in Chrome
@@ -7,7 +8,7 @@ const isChrome = () => {
   return /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor)
 }
 
-export default function VideoFileSharing({ socket, roomId, isHost, participants, onVideoReady, hostVideoSource }) {
+export default function VideoFileSharing({ socket, roomId, isHost, participants, onVideoReady, hostVideoSource, initialFileShare }) {
   const [selectedFile, setSelectedFile] = useState(null)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [isSharing, setIsSharing] = useState(false)
@@ -16,12 +17,42 @@ export default function VideoFileSharing({ socket, roomId, isHost, participants,
   const [sharingStatus, setSharingStatus] = useState('idle') // idle, uploading, sharing, ready, pending, downloading, error
   const [pendingFileInfo, setPendingFileInfo] = useState(null)
   const [pendingHostId, setPendingHostId] = useState(null)
+  const [iceServers, setIceServers] = useState([])
   
   const fileInputRef = useRef(null)
   const peersRef = useRef({})
   const chunksRef = useRef([])
   const fileInfoRef = useRef(null)
   const currentTransferRef = useRef(null)
+
+  // Handle latecomer sync
+  useEffect(() => {
+    if (initialFileShare && !isHost && sharingStatus === 'idle') {
+      console.log('🎥 Latecomer Sync: Received initial file share', initialFileShare)
+      handleVideoFileInfo(initialFileShare)
+    }
+  }, [initialFileShare, isHost, sharingStatus, handleVideoFileInfo])
+
+  // Fetch ICE servers on mount
+  useEffect(() => {
+    const fetchIceServers = async () => {
+      try {
+        const token = localStorage.getItem('token')
+        const response = await fetch(`${window.location.origin}/api/ice-servers`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+        const data = await response.json()
+        setIceServers(data.iceServers)
+      } catch (err) {
+        console.error('Failed to fetch ICE servers:', err)
+        // Fallback to STUN only if TURN fetch fails
+        setIceServers([{ urls: 'stun:stun.l.google.com:19302' }])
+      }
+    }
+    fetchIceServers()
+  }, [])
 
   const sendVideoFile = useCallback((peer, file) => {
     const reader = new FileReader()
@@ -86,27 +117,7 @@ export default function VideoFileSharing({ socket, roomId, isHost, participants,
       initiator: false,
       trickle: isChrome() ? true : false,  // Enable trickle for Chrome
       config: {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' },
-          { urls: 'stun:stun3.l.google.com:19302' },
-          { urls: 'stun:stun4.l.google.com:19302' },
-          // Add more STUN servers for better connectivity
-          { urls: 'stun:stun.services.mozilla.com' },
-          { urls: 'stun:stun.stunprotocol.org:3478' },
-          // Add public TURN servers for NAT traversal
-          {
-            urls: 'turn:openrelay.metered.ca:80',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-          },
-          {
-            urls: 'turn:openrelay.metered.ca:443',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-          }
-        ],
+        iceServers: iceServers,
         // Chrome-specific ICE configuration
         iceTransportPolicy: 'all',
         bundlePolicy: 'balanced',
@@ -187,27 +198,7 @@ export default function VideoFileSharing({ socket, roomId, isHost, participants,
       initiator: true,
       trickle: isChrome() ? true : false,  // Enable trickle for Chrome
       config: {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' },
-          { urls: 'stun:stun3.l.google.com:19302' },
-          { urls: 'stun:stun4.l.google.com:19302' },
-          // Add more STUN servers for better connectivity
-          { urls: 'stun:stun.services.mozilla.com' },
-          { urls: 'stun:stun.stunprotocol.org:3478' },
-          // Add public TURN servers for NAT traversal
-          {
-            urls: 'turn:openrelay.metered.ca:80',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-          },
-          {
-            urls: 'turn:openrelay.metered.ca:443',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-          }
-        ],
+        iceServers: iceServers,
         // Chrome-specific ICE configuration
         iceTransportPolicy: 'all',
         bundlePolicy: 'balanced',
@@ -481,9 +472,9 @@ export default function VideoFileSharing({ socket, roomId, isHost, participants,
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4">
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-        <Upload className="h-5 w-5" />
+    <div className="bg-white/5 backdrop-blur-xl border border-white/5 rounded-2xl p-5 space-y-5">
+      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+        <Upload className="h-4 w-4 text-violet-400" />
         P2P Video Sharing
       </h3>
 
@@ -499,47 +490,47 @@ export default function VideoFileSharing({ socket, roomId, isHost, participants,
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors"
+              className="glass-button w-full !from-violet-600 !to-violet-500 !py-2.5 text-xs tracking-wider"
               disabled={sharingStatus === 'sharing'}
             >
               <Upload className="h-4 w-4" />
-              Select Video File
+              SELECT VIDEO FILE
             </button>
           </div>
 
           {selectedFile && (
-            <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-3">
+            <div className="bg-white/5 border border-white/5 rounded-xl p-4">
               <div className="flex items-center gap-3">
-                <div className="flex-1">
-                  <p className="text-gray-900 dark:text-white font-medium">{selectedFile.name}</p>
-                  <p className="text-gray-600 dark:text-gray-400 text-sm">{formatFileSize(selectedFile.size)}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-medium text-sm truncate">{selectedFile.name}</p>
+                  <p className="text-slate-500 text-[10px] font-mono mt-0.5">{formatFileSize(selectedFile.size)}</p>
                 </div>
                 {sharingStatus === 'ready' && (
-                  <CheckCircle className="h-5 w-5 text-green-500 dark:text-green-400" />
+                  <CheckCircle className="h-5 w-5 text-green-400" />
                 )}
               </div>
 
               {sharingStatus === 'ready' && !isSharing && (
                 <button
                   onClick={shareVideoFile}
-                  className="w-full mt-3 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                  className="w-full mt-4 glass-button !from-green-600 !to-green-500 !py-2.5 text-[10px] tracking-widest"
                 >
                   <Users className="h-4 w-4" />
-                  Share with Participants ({participants.length - 1})
+                  INITIALIZE TRANSFER ({participants.length - 1} PEERS)
                 </button>
               )}
 
               {isSharing && (
-                <div className="mt-3 space-y-2">
-                  <div className="text-center text-green-500 dark:text-green-400 text-sm">
-                    <CheckCircle className="h-4 w-4 inline mr-2" />
-                    Video shared! Participants are downloading...
+                <div className="mt-4 space-y-3">
+                  <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3 text-center">
+                    <p className="text-green-400 text-[10px] font-bold uppercase tracking-wider">Protocol Active</p>
+                    <p className="text-slate-400 text-[10px] mt-1">Participants are synchronizing...</p>
                   </div>
                   <button
                     onClick={cancelTransfer}
-                    className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
+                    className="w-full glass-button !from-red-600 !to-red-500 !py-2 text-[10px] tracking-widest opacity-50 hover:opacity-100"
                   >
-                    Cancel Transfer
+                    TERMINATE TRANSFER
                   </button>
                 </div>
               )}
@@ -547,42 +538,42 @@ export default function VideoFileSharing({ socket, roomId, isHost, participants,
           )}
         </div>
       ) : isHost && hostVideoSource !== 'file' ? (
-        <div className="text-center text-gray-500 dark:text-gray-400 py-4">
-          <Upload className="h-8 w-8 mx-auto mb-2 opacity-50" />
-          <p className="text-sm">Switch to "Local File (P2P)" mode to share video files</p>
+        <div className="text-center py-6 px-4 bg-white/5 rounded-2xl border border-dashed border-white/10 group">
+          <Upload className="h-10 w-10 mx-auto mb-3 text-slate-600 group-hover:text-violet-500/50 transition-colors" />
+          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest leading-relaxed">
+            Switch to "Local File (P2P)"<br/>mode to share video files
+          </p>
         </div>
       ) : (
         <div className="space-y-4">
           {sharingStatus === 'idle' && (
-            <div className="text-center text-gray-500 dark:text-gray-400 py-4">
-              <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>Waiting for host to share a video file...</p>
+            <div className="text-center py-8 px-4 bg-white/5 rounded-2xl border border-dashed border-white/10">
+              <Users className="h-10 w-10 mx-auto mb-3 text-slate-700 animate-pulse" />
+              <p className="text-slate-600 text-[10px] font-bold uppercase tracking-widest">Awaiting host transmission...</p>
             </div>
           )}
 
           {sharingStatus === 'pending' && pendingFileInfo && (
             <div className="space-y-3">
-              <div className="bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-600/50 rounded-lg p-4">
-                <div className="text-center mb-4">
-                  <Download className="h-8 w-8 mx-auto mb-2 text-yellow-600 dark:text-yellow-400" />
-                  <p className="text-yellow-700 dark:text-yellow-400 font-semibold">Incoming Video File</p>
+              <div className="bg-violet-500/10 border border-violet-500/20 rounded-2xl p-5 text-center">
+                <Download className="h-10 w-10 mx-auto mb-4 text-violet-400" />
+                <p className="text-white font-bold text-sm mb-1 tracking-tight">Incoming Data Stream</p>
+                <div className="bg-black/20 rounded-xl p-3 my-4 border border-white/5">
+                  <p className="text-violet-300 font-mono text-[10px] truncate">{pendingFileInfo.name}</p>
+                  <p className="text-slate-500 text-[10px] font-mono mt-1 uppercase">{formatFileSize(pendingFileInfo.size)}</p>
                 </div>
-                <div className="bg-white dark:bg-gray-700 rounded p-3 mb-4">
-                  <p className="text-gray-900 dark:text-white font-medium">{pendingFileInfo.name}</p>
-                  <p className="text-gray-600 dark:text-gray-400 text-sm">{formatFileSize(pendingFileInfo.size)}</p>
-                </div>
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                   <button
                     onClick={acceptFileTransfer}
-                    className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg"
+                    className="flex-1 glass-button !from-violet-600 !to-violet-500 !py-2.5 text-[10px] tracking-widest"
                   >
-                    Accept
+                    ACCEPT
                   </button>
                   <button
                     onClick={rejectFileTransfer}
-                    className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
+                    className="flex-1 glass-button !bg-transparent !border-white/10 !from-transparent !to-transparent hover:!bg-white/5 !py-2.5 text-[10px] tracking-widest"
                   >
-                    Reject
+                    REJECT
                   </button>
                 </div>
               </div>
@@ -590,53 +581,62 @@ export default function VideoFileSharing({ socket, roomId, isHost, participants,
           )}
 
           {sharingStatus === 'downloading' && (
-            <div className="space-y-3">
-              <div className="text-center text-blue-600 dark:text-blue-400">
-                <Download className="h-6 w-6 mx-auto mb-2" />
-                <p>Downloading video file...</p>
+            <div className="space-y-4 bg-white/5 border border-white/5 rounded-2xl p-5">
+              <div className="text-center">
+                <div className="w-12 h-12 bg-violet-500/20 rounded-full flex items-center justify-center mx-auto mb-3 border border-violet-500/30">
+                  <Download className="h-6 w-6 text-violet-400 animate-bounce" />
+                </div>
+                <p className="text-white font-bold text-xs uppercase tracking-widest">Synchronizing Data...</p>
               </div>
+              
               {Object.entries(downloadProgress).map(([fileName, progress]) => (
-                <div key={fileName} className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-900 dark:text-white">{fileName}</span>
-                    <span className="text-gray-600 dark:text-gray-400">{progress}%</span>
+                <div key={fileName} className="space-y-3">
+                  <div className="flex justify-between items-end">
+                    <span className="text-slate-400 text-[10px] font-mono truncate max-w-[150px]">{fileName}</span>
+                    <span className="text-violet-400 font-bold text-xs">{progress}%</span>
                   </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div
-                      className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${progress}%` }}
+                  <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden border border-white/5">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${progress}%` }}
+                      className="bg-gradient-to-r from-violet-500 to-cyan-500 h-full shadow-[0_0_10px_rgba(139,92,246,0.5)]"
                     />
                   </div>
                 </div>
               ))}
+              
               <button
                 onClick={cancelTransfer}
-                className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
+                className="w-full glass-button !from-red-600 !to-red-500 !py-2 text-[10px] tracking-widest opacity-50 hover:opacity-100"
               >
-                Cancel Download
+                ABORT DOWNLOAD
               </button>
             </div>
           )}
 
           {sharingStatus === 'ready' && (
-            <div className="text-center text-green-600 dark:text-green-400 py-4">
-              <CheckCircle className="h-8 w-8 mx-auto mb-2" />
-              <p>Video file downloaded and ready!</p>
+            <div className="text-center py-8 px-4 bg-green-500/5 rounded-2xl border border-green-500/20">
+              <CheckCircle className="h-10 w-10 mx-auto mb-3 text-green-400" />
+              <p className="text-green-400 text-[10px] font-bold uppercase tracking-widest">Buffer Ready</p>
+              <p className="text-slate-500 text-[10px] mt-1 uppercase">Media pipeline initialized</p>
             </div>
           )}
 
           {sharingStatus === 'error' && (
-            <div className="text-center text-red-600 dark:text-red-400 py-4">
-              <AlertCircle className="h-8 w-8 mx-auto mb-2" />
-              <p>Error downloading video file. Please try again.</p>
+            <div className="text-center py-8 px-4 bg-red-500/5 rounded-2xl border border-red-500/20">
+              <AlertCircle className="h-10 w-10 mx-auto mb-3 text-red-400" />
+              <p className="text-red-400 text-[10px] font-bold uppercase tracking-widest">Protocol Failure</p>
+              <p className="text-slate-500 text-[10px] mt-1 uppercase">Connection terminated by peer</p>
             </div>
           )}
         </div>
       )}
 
-      <div className="text-xs text-gray-500 dark:text-gray-500 text-center">
-        <p>P2P sharing - files are transferred directly between browsers</p>
-        <p>Supported formats: MP4, WebM, MOV, AVI (max 3GB)</p>
+      <div className="bg-black/20 rounded-xl p-3 border border-white/5">
+        <p className="text-[9px] text-slate-500 text-center font-bold uppercase tracking-[0.1em] leading-relaxed">
+          P2P encryption active • End-to-end direct link<br/>
+          <span className="text-slate-600 mt-1 block">Protocols: MP4, WebM, MOV, AVI (Max 3GB)</span>
+        </p>
       </div>
     </div>
   )

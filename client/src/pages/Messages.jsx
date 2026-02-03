@@ -150,7 +150,7 @@ export default function Messages() {
           console.error('❌ No token found in localStorage')
           return
         }
-        const response = await axios.get(`http://localhost:3001/api/users/search?query=${searchQuery}`, {
+        const response = await axios.get(`/api/users/search?query=${searchQuery}`, {
           headers: {
             Authorization: `Bearer ${token}`
           }

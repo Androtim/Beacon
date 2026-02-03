@@ -5,7 +5,8 @@ import { useWatchParty } from '../hooks/useWatchParty'
 import VideoPlayer from '../components/VideoPlayer'
 import ChatBox from '../components/ChatBox'
 import VideoFileSharing from '../components/VideoFileSharing'
-import { Users, Video, Wifi, WifiOff, Crown, Upload, Link as LinkIcon, Copy, Check, LogOut } from 'lucide-react'
+import { Users, Video, Wifi, WifiOff, Crown, Upload, Link as LinkIcon, Copy, Check, LogOut, MessageSquare, MonitorPlay, Zap } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 
 export default function WatchParty() {
   const { id } = useParams()
@@ -14,141 +15,90 @@ export default function WatchParty() {
   const playerRef = useRef()
   const [videoUrl, setVideoUrl] = useState('')
   const [showUrlInput, setShowUrlInput] = useState(false)
-  const [videoSource, setVideoSource] = useState('url') // 'url' or 'file'
+  const [videoSource, setVideoSource] = useState('url')
   const [copied, setCopied] = useState(false)
-  const [localVideoUrl, setLocalVideoUrl] = useState(null) // For P2P blob URLs
-  const [localVideoInfo, setLocalVideoInfo] = useState(null) // File info for P2P videos
+  const [localVideoUrl, setLocalVideoUrl] = useState(null)
+  const [localVideoInfo, setLocalVideoInfo] = useState(null)
   
   const {
     participants,
     isHost,
     messages,
     videoState,
+    fileShare,
     setVideoUrl: setSharedVideoUrl,
     playVideo,
     pauseVideo,
     seekVideo,
     sendMessage,
     connected,
-    socket // Get the socket from useWatchParty that's already joined the room
+    socket
   } = useWatchParty(id, user)
   
-
-  // Handle video player events (only emit if user initiated the action)
-  const [userInitiated, setUserInitiated] = useState(false)
   const [syncingFromRemote, setSyncingFromRemote] = useState(false)
-  
 
   const handlePlay = (currentTime) => {
-    // Only broadcast if not syncing from remote (to prevent loops)
-    if (!syncingFromRemote) {
-      playVideo(currentTime)
-    }
+    if (!syncingFromRemote) playVideo(currentTime)
   }
 
   const handlePause = (currentTime) => {
-    // Only broadcast if not syncing from remote (to prevent loops)
-    if (!syncingFromRemote) {
-      pauseVideo(currentTime)
-    }
+    if (!syncingFromRemote) pauseVideo(currentTime)
   }
 
   const handleSeeked = (currentTime) => {
-    // Only broadcast if not syncing from remote (to prevent loops)
-    if (!syncingFromRemote) {
-      seekVideo(currentTime)
-    }
+    if (!syncingFromRemote) seekVideo(currentTime)
   }
 
-  // Sync video state from other participants
   useEffect(() => {
     if (!playerRef.current) return
-
     const player = playerRef.current
     
-    // Handle both Video.js, native video, and YouTube player APIs
     const getCurrentTime = () => {
-      // Native video element
-      if (typeof player.currentTime === 'number') {
-        return player.currentTime
-      }
-      // Video.js
-      if (player.currentTime && typeof player.currentTime === 'function') {
-        return player.currentTime()
-      }
-      // YouTube
-      if (player.getCurrentTime) {
-        return player.getCurrentTime()
-      }
+      if (typeof player.currentTime === 'number') return player.currentTime
+      if (player.currentTime && typeof player.currentTime === 'function') return player.currentTime()
+      if (player.getCurrentTime) return player.getCurrentTime()
       return 0
     }
     
     const setCurrentTime = (time) => {
-      // Native video element
-      if (typeof player.currentTime === 'number') {
-        player.currentTime = time
-      }
-      // Video.js
-      else if (player.currentTime && typeof player.currentTime === 'function') {
-        player.currentTime(time)
-      }
-      // YouTube
-      else if (player.seekTo) {
-        player.seekTo(time)
-      }
+      if (typeof player.currentTime === 'number') player.currentTime = time
+      else if (player.currentTime && typeof player.currentTime === 'function') player.currentTime(time)
+      else if (player.seekTo) player.seekTo(time)
     }
     
     const isPlayerPaused = () => {
-      // Native video element
-      if (typeof player.paused === 'boolean') {
-        return player.paused
-      }
-      // Video.js
-      if (player.paused && typeof player.paused === 'function') {
-        return player.paused()
-      }
-      // YouTube
-      if (player.isPaused) {
-        return player.isPaused()
-      }
+      if (typeof player.paused === 'boolean') return player.paused
+      if (player.paused && typeof player.paused === 'function') return player.paused()
+      if (player.isPaused) return player.isPaused()
       return false
     }
     
     const playVideo = () => {
       if (player.play) {
-        const playPromise = player.play()
-        // Handle promise-based play for native video
-        if (playPromise && playPromise.catch) {
-          playPromise.catch(e => {})
-        }
+        const p = player.play()
+        if (p && p.catch) p.catch(() => {})
       }
     }
     
-    const pauseVideo = () => {
-      if (player.pause) {
-        player.pause()
-      }
-    }
+    const pauseVideo = () => player.pause?.()
 
     const currentTime = getCurrentTime()
     const timeDiff = Math.abs(currentTime - videoState.currentTime)
 
-    // Only sync if there's a significant time difference (> 1 second)
-    if (timeDiff > 1) {
+    if (timeDiff > 1.5) {
       setSyncingFromRemote(true)
       setCurrentTime(videoState.currentTime)
-      setTimeout(() => setSyncingFromRemote(false), 100)
+      setTimeout(() => setSyncingFromRemote(false), 200)
     }
 
-    // Sync play/pause state
     if (videoState.isPlaying && isPlayerPaused()) {
       setSyncingFromRemote(true)
       playVideo()
-      setTimeout(() => setSyncingFromRemote(false), 100)
+      setTimeout(() => setSyncingFromRemote(false), 200)
     } else if (!videoState.isPlaying && !isPlayerPaused()) {
       setSyncingFromRemote(true)
       pauseVideo()
-      setTimeout(() => setSyncingFromRemote(false), 100)
+      setTimeout(() => setSyncingFromRemote(false), 200)
     }
   }, [videoState])
 
@@ -161,19 +111,10 @@ export default function WatchParty() {
     }
   }
 
-  const handlePlayerInteraction = () => {
-    setUserInitiated(true)
-  }
-
   const handleVideoFileReady = (url, fileInfo) => {
-    // For P2P transfers, we need to set the URL locally without broadcasting
-    // because blob URLs are local to each browser
     setLocalVideoUrl(url)
     setLocalVideoInfo(fileInfo)
-    setVideoSource('file') // Ensure we're in file mode
-    
-    // Force a re-render by updating a dummy state
-    setUserInitiated(prev => !prev)
+    setVideoSource('file')
   }
 
   const copyPartyCode = () => {
@@ -182,211 +123,186 @@ export default function WatchParty() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const leaveParty = () => {
-    // Navigate to home page
-    navigate('/')
-  }
-
-  // Add error boundary check
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white flex items-center justify-center">
-        <p>Please log in to join watch parties</p>
-      </div>
-    )
-  }
+  if (!user) return null
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white">
-      <div className="container mx-auto px-4 py-6">
+    <div className="min-h-screen relative overflow-x-hidden selection:bg-violet-500/30">
+      {/* Background Orbs */}
+      <div className="orb w-[600px] h-[600px] bg-violet-600/10 top-[-200px] left-[-200px]" />
+      <div className="orb w-[500px] h-[500px] bg-cyan-500/10 bottom-[-100px] right-[-100px]" />
+
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-4 sm:py-6 relative z-10 flex flex-col min-h-screen min-h-[100dvh]">
         {/* Header */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-bold">Watch Party: {id}</h1>
-                  <button
-                    onClick={copyPartyCode}
-                    className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                    title="Copy party code"
-                  >
-                    {copied ? (
-                      <Check size={20} className="text-green-500 dark:text-green-400" />
-                    ) : (
-                      <Copy size={20} />
-                    )}
-                  </button>
-                </div>
-                <p className="text-gray-600 dark:text-gray-400">Share this code with friends to invite them</p>
+        <header className="glass-card px-3 sm:px-6 py-3 sm:py-4 border-white/5 flex flex-wrap items-center justify-between gap-4 mb-6 shrink-0">
+          <div className="flex items-center gap-3 sm:gap-6">
+            <motion.button 
+              whileHover={{ scale: 1.05 }}
+              onClick={() => navigate('/')}
+              className="w-9 h-9 sm:w-10 sm:h-10 bg-white/5 rounded-xl flex items-center justify-center hover:bg-white/10 transition-colors border border-white/5"
+            >
+              <LogOut className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400 rotate-180" />
+            </motion.button>
+            <div className="h-6 sm:h-8 w-px bg-white/10 hidden sm:block" />
+            <div>
+              <div className="flex items-center gap-2 sm:gap-3">
+                <h1 className="text-base sm:text-xl font-bold text-white tracking-tight">Session: <span className="font-mono text-violet-400">{id}</span></h1>
+                <button onClick={copyPartyCode} className="p-1.5 hover:bg-white/5 rounded-lg transition-colors group">
+                  {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} className="text-slate-500 group-hover:text-white" />}
+                </button>
               </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                {connected ? (
-                  <Wifi size={16} className="text-green-500 dark:text-green-400" />
-                ) : (
-                  <WifiOff size={16} className="text-red-500 dark:text-red-400" />
+              <div className="flex items-center gap-3 mt-0.5">
+                <div className="flex items-center gap-1.5">
+                  <div className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'} animate-pulse`} />
+                  <span className="text-[8px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-widest">{connected ? 'Relay Active' : 'Relay Offline'}</span>
+                </div>
+                {isHost && (
+                  <div className="flex items-center gap-1.5">
+                    <Crown size={10} className="text-yellow-500" />
+                    <span className="text-[8px] sm:text-[10px] font-bold text-yellow-500/70 uppercase tracking-widest hidden xs:inline">Host Privileges</span>
+                  </div>
                 )}
-                <span className="text-sm">
-                  {connected ? 'Connected' : 'Disconnected'}
-                </span>
               </div>
-              {isHost && (
-                <div className="flex items-center space-x-2">
-                  <Crown size={16} className="text-yellow-500 dark:text-yellow-400" />
-                  <span className="text-sm">Host</span>
-                </div>
-              )}
-              <button
-                onClick={leaveParty}
-                className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
-              >
-                <LogOut size={16} />
-                <span>Leave Party</span>
-              </button>
             </div>
           </div>
-        </div>
 
-        {/* Video Source Selection (for hosts) */}
-        {isHost && (
-          <div className="mb-4 space-y-4">
-            {/* Source Type Selector */}
-            <div className="flex space-x-2">
-              <button
-                onClick={() => setVideoSource('url')}
-                className={`px-4 py-2 rounded flex items-center space-x-2 transition-colors ${
-                  videoSource === 'url' 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                }`}
-              >
-                <LinkIcon size={16} />
-                <span>Video URL</span>
-              </button>
-              <button
-                onClick={() => setVideoSource('file')}
-                className={`px-4 py-2 rounded flex items-center space-x-2 transition-colors ${
-                  videoSource === 'file' 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                }`}
-              >
-                <Upload size={16} />
-                <span>Local File (P2P)</span>
-              </button>
-            </div>
+          <div className="flex items-center gap-3 ml-auto sm:ml-0">
+             <div className="hidden md:flex -space-x-2 mr-2">
+                {participants.slice(0, 5).map((p, i) => (
+                   <div key={p.id} className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-violet-500 border-2 border-[#0F172A] flex items-center justify-center text-[9px] font-bold text-white uppercase" title={p.username}>
+                      {p.username[0]}
+                   </div>
+                ))}
+                {participants.length > 5 && (
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-700 border-2 border-[#0F172A] flex items-center justify-center text-[9px] font-bold text-white">
+                    +{participants.length - 5}
+                  </div>
+                )}
+             </div>
+             <button onClick={() => navigate('/')} className="glass-button !py-1.5 !px-3 sm:!py-2 sm:!px-4 !rounded-xl !from-red-600 !to-red-500 shadow-red-500/20 text-[10px]">
+               LEAVE
+             </button>
+          </div>
+        </header>
 
-            {/* URL Input */}
-            {videoSource === 'url' && (
-              <div>
-                {!showUrlInput ? (
-                  <button
-                    onClick={() => setShowUrlInput(true)}
-                    className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded flex items-center space-x-2"
+        <div className="flex-1 flex flex-col lg:flex-row gap-6 min-h-0 overflow-visible lg:overflow-hidden">
+          {/* Main Stage */}
+          <div className="flex-1 flex flex-col gap-6 min-h-0">
+            <div className="aspect-video lg:flex-1 bg-black/40 rounded-3xl border border-white/5 overflow-hidden relative group">
+              <AnimatePresence mode="wait">
+                {(localVideoUrl || videoState.url) ? (
+                  <motion.div 
+                    key={localVideoUrl || videoState.url}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="h-full w-full"
                   >
-                    <Video size={16} />
-                    <span>Set Video URL</span>
-                  </button>
-                ) : (
-                  <form onSubmit={handleVideoUrlSubmit} className="flex space-x-2">
-                    <input
-                      type="url"
-                      value={videoUrl}
-                      onChange={(e) => setVideoUrl(e.target.value)}
-                      placeholder="Enter video URL (YouTube, MP4, etc.)"
-                      className="flex-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      autoFocus
+                    <VideoPlayer
+                      src={localVideoUrl || videoState.url}
+                      playerRef={playerRef}
+                      onPlay={handlePlay}
+                      onPause={handlePause}
+                      onSeeked={handleSeeked}
+                      fileType={localVideoInfo?.type}
                     />
-                    <button
-                      type="submit"
-                      className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded"
-                    >
-                      Set
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowUrlInput(false)}
-                      className="bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 rounded"
-                    >
-                      Cancel
-                    </button>
-                  </form>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-        
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Video Player */}
-          <div className="lg:col-span-3">
-            <div className="bg-black rounded-lg overflow-hidden">
-              {(localVideoUrl || videoState.url) ? (
-                <div onMouseDown={handlePlayerInteraction}>
-                  <VideoPlayer
-                    key={localVideoUrl || videoState.url} // Force re-render when URL changes
-                    src={localVideoUrl || videoState.url}
-                    playerRef={playerRef}
-                    onPlay={handlePlay}
-                    onPause={handlePause}
-                    onSeeked={handleSeeked}
-                    fileType={localVideoInfo?.type}
-                  />
-                </div>
-              ) : (
-                <div className="aspect-video flex items-center justify-center">
-                  <div className="text-center">
-                    <Video size={48} className="text-gray-400 mx-auto mb-2" />
-                    <p className="text-gray-600 dark:text-gray-400">
+                  </motion.div>
+                ) : (
+                  <div className="h-full w-full flex flex-col items-center justify-center p-8 text-center">
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/5 rounded-3xl flex items-center justify-center mb-6 border border-white/10 group-hover:scale-110 transition-transform duration-700">
+                      <MonitorPlay className="h-8 w-8 sm:h-10 sm:w-10 text-slate-600" />
+                    </div>
+                    <p className="text-slate-500 font-medium text-base sm:text-lg">
                       {isHost 
-                        ? "Click 'Set Video URL' to start watching" 
-                        : "Waiting for host to set a video..."
+                        ? "Configure source coordinates to begin" 
+                        : "Waiting for host to initialize stream..."
                       }
                     </p>
                   </div>
-                </div>
-              )}
+                )}
+              </AnimatePresence>
             </div>
-          </div>
-          
-          {/* Sidebar */}
-          <div className="space-y-4">
-            {/* Participants */}
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-              <div className="flex items-center space-x-2 mb-3">
-                <Users size={16} />
-                <h3 className="font-semibold">Participants ({participants.length})</h3>
-              </div>
-              <div className="space-y-2">
-                {participants.map((participant) => (
-                  <div key={participant.id} className="flex items-center space-x-2">
-                    <div className="w-2 h-2 bg-green-500 dark:bg-green-400 rounded-full"></div>
-                    <span className="text-sm">{participant.username}</span>
-                    {participant.id === user.id && (
-                      <span className="text-xs text-gray-500 dark:text-gray-400">(You)</span>
+
+            {/* Host Controls */}
+            {isHost && (
+              <div className="glass-card p-4 shrink-0 border-violet-500/10">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+                  <div className="flex bg-white/5 p-1 rounded-xl border border-white/5">
+                    <button
+                      onClick={() => setVideoSource('url')}
+                      className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-[10px] font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${videoSource === 'url' ? 'bg-violet-500 text-white shadow-lg shadow-violet-500/20' : 'text-slate-500 hover:text-white'}`}
+                    >
+                      <LinkIcon size={14} /> URL
+                    </button>
+                    <button
+                      onClick={() => setVideoSource('file')}
+                      className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-[10px] font-bold tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${videoSource === 'file' ? 'bg-violet-500 text-white shadow-lg shadow-violet-500/20' : 'text-slate-500 hover:text-white'}`}
+                    >
+                      <Upload size={14} /> P2P FILE
+                    </button>
+                  </div>
+
+                  <div className="flex-1">
+                    {videoSource === 'url' && (
+                      <form onSubmit={handleVideoUrlSubmit} className="flex gap-2">
+                        <input
+                          type="url"
+                          value={videoUrl}
+                          onChange={(e) => setVideoUrl(e.target.value)}
+                          placeholder="STREAM SOURCE URL (MP4, HLS...)"
+                          className="glass-input !py-2 text-xs sm:text-sm font-mono tracking-wider flex-1"
+                        />
+                        <button type="submit" className="glass-button !py-2 !px-4 sm:!px-6 text-[10px] !from-cyan-500 !to-cyan-400">
+                          LOAD
+                        </button>
+                      </form>
+                    )}
+                    {videoSource === 'file' && (
+                      <div className="flex items-center gap-3 text-slate-400 text-xs sm:text-sm italic px-2 sm:px-4 py-2">
+                         <Zap size={14} className="text-violet-400 shrink-0" />
+                         Local file protocol active. Use sidebar tools.
+                      </div>
                     )}
                   </div>
-                ))}
+                </div>
               </div>
-            </div>
-            
-            {/* Chat */}
-            <ChatBox messages={messages} onSendMessage={sendMessage} />
-            
-            {/* Video File Sharing - Always show for P2P transfers */}
-            {socket && (
-              <VideoFileSharing
-                socket={socket}
-                roomId={id}
-                isHost={isHost}
-                participants={participants}
-                onVideoReady={handleVideoFileReady}
-                hostVideoSource={videoSource}
-              />
             )}
           </div>
+
+          {/* Comms Sidebar */}
+          <aside className="w-full lg:w-[400px] shrink-0 flex flex-col gap-6 min-h-[400px] lg:min-h-0 lg:h-auto overflow-visible lg:overflow-hidden pb-8 lg:pb-0">
+             {/* Participants & Comms */}
+             <div className="glass-card flex-1 flex flex-col overflow-hidden border-white/5 min-h-[300px]">
+                <div className="px-6 py-4 border-b border-white/5 bg-white/5 flex items-center justify-between shrink-0">
+                   <div className="flex items-center gap-2">
+                      <MessageSquare size={16} className="text-violet-400" />
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">COMMS CENTER</span>
+                   </div>
+                   <div className="flex items-center gap-1.5">
+                      <Users size={12} className="text-slate-500" />
+                      <span className="text-[10px] font-bold text-slate-500">{participants.length}</span>
+                   </div>
+                </div>
+                
+                <div className="flex-1 overflow-hidden flex flex-col">
+                  <ChatBox messages={messages} onSendMessage={sendMessage} />
+                </div>
+             </div>
+
+             {/* Protocol Tools */}
+             <div className="glass-card p-6 shrink-0 border-white/5">
+               {socket && (
+                <VideoFileSharing
+                  socket={socket}
+                  roomId={id}
+                  isHost={isHost}
+                  participants={participants}
+                  onVideoReady={handleVideoFileReady}
+                  hostVideoSource={videoSource}
+                  initialFileShare={fileShare}
+                />
+              )}
+             </div>
+          </aside>
         </div>
       </div>
     </div>

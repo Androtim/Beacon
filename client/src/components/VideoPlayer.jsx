@@ -222,11 +222,12 @@ export default function VideoPlayer({
     // For blob URLs, use native video element with sync support
     if (src.startsWith('blob:')) {
       return (
-        <div className="w-full">
+        <div className="w-full h-full flex items-center justify-center bg-black overflow-hidden rounded-[inherit]">
           <video
             ref={videoRef}
             controls
-            className="w-full"
+            playsInline
+            className="w-full h-full object-contain"
             src={src}
             onLoadedMetadata={(e) => {
               console.log('Video metadata loaded')

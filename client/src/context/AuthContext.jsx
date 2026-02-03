@@ -4,7 +4,7 @@ import axios from 'axios'
 const AuthContext = createContext()
 
 // Set axios defaults
-axios.defaults.baseURL = 'http://localhost:3001'
+axios.defaults.baseURL = window.location.origin
 axios.defaults.withCredentials = true
 
 export function useAuth() {
