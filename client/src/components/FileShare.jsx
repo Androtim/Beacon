@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Upload, Download, Copy, Check, X, FileIcon, Share2, Loader, Box, ArrowRight, ShieldCheck, Zap, Shield, Info, Plus } from 'lucide-react'
+import { Upload, Download, Copy, Check, X, FileIcon, Share2, Loader, Box, ArrowRight, ShieldCheck, Zap, Shield, Plus } from 'lucide-react'
 import SimplePeer from 'simple-peer'
 import JSZip from 'jszip'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -10,6 +10,7 @@ const isChrome = () => {
 }
 
 export default function FileShare({ socket }) {
+  // 1. States
   const [mode, setMode] = useState('idle') 
   const [shareCode, setShareCode] = useState('')
   const [inputCode, setInputCode] = useState('')
@@ -22,13 +23,156 @@ export default function FileShare({ socket }) {
   const [peerId, setPeerId] = useState(null)
   const [iceServers, setIceServers] = useState([])
   
+  // 2. Refs
   const fileInputRef = useRef(null)
   const peersRef = useRef({})
   const filesRef = useRef({})
   const chunksRef = useRef({})
   const expectingBinaryRef = useRef(null)
 
-  // Fetch ICE servers on mount
+  // 3. Callbacks
+  
+  const formatFileSize = useCallback((bytes) => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024, sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }, [])
+
+  const sendFile = useCallback(async (peer, file, fileIndex) => {
+    const chunkSize = 16 * 1024 
+    const totalChunks = Math.ceil(file.size / chunkSize)
+    
+    peer.send(JSON.stringify({
+      type: 'file-meta',
+      fileIndex,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      totalChunks
+    }))
+    
+    const bufferThreshold = 64 * 1024
+    for (let index = 0; index < totalChunks; index++) {
+      try {
+        const start = index * chunkSize
+        const end = Math.min(start + chunkSize, file.size)
+        const chunk = await file.slice(start, end).arrayBuffer()
+        
+        peer.send(JSON.stringify({ type: 'chunk-header', fileIndex, index }))
+        await new Promise(resolve => setTimeout(resolve, 0))
+        peer.send(chunk)
+        
+        if (peer._channel && peer._channel.bufferedAmount > bufferThreshold) {
+          await new Promise(resolve => {
+            const check = () => { if (!peer._channel || peer._channel.bufferedAmount <= 16 * 1024) resolve(); else setTimeout(check, 20) }
+            check()
+          })
+        }
+        
+        if (index % 50 === 0 || index === totalChunks - 1) {
+          setUploadProgress(prev => ({ ...prev, [file.name]: Math.round(((index + 1) / totalChunks) * 100) }))
+        }
+      } catch (err) { break }
+    }
+    peer.send(JSON.stringify({ type: 'file-complete', fileIndex, fileName: file.name }))
+  }, [])
+
+  const cancelTransfer = useCallback(() => {
+    Object.values(peersRef.current).forEach(p => p?.destroy?.())
+    peersRef.current = {}
+    setMode('idle'); setSharingStatus('idle'); setShareCode(''); setSelectedFiles([]); setPendingFiles([]); setDownloadProgress({}); setUploadProgress({}); chunksRef.current = {}; expectingBinaryRef.current = null
+    if (shareCode) socket.emit('file-share-cancel', { code: shareCode })
+  }, [socket, shareCode])
+
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files)
+    if (files.length === 0) return
+    setSelectedFiles(files)
+    filesRef.current = files
+    const code = Math.random().toString(36).substring(2, 10).toUpperCase()
+    setShareCode(code)
+    setMode('sharing')
+    setSharingStatus('waiting')
+    socket.emit('file-share-create', { code, files: files.map(f => ({ name: f.name, size: f.size, type: f.type })) })
+    e.target.value = null
+  }
+
+  const joinFileShare = () => {
+    if (inputCode.length !== 8) return
+    setMode('receiving')
+    setSharingStatus('waiting')
+    socket.emit('file-share-join', { code: inputCode.toUpperCase() })
+  }
+
+  const handleFileShareInfo = useCallback(({ files, hostId }) => {
+    setPendingFiles(files)
+    setPeerId(hostId)
+    setSharingStatus('ready')
+  }, [])
+
+  const handleFileShareRequest = useCallback(({ from }) => {
+    console.log('📦 Link established. Starting transmission to:', from)
+    const peer = new SimplePeer({ initiator: false, trickle: true, config: { iceServers } })
+    peersRef.current[from] = peer
+    peer.on('signal', signal => socket.emit('file-share-signal', { to: from, signal }))
+    peer.on('connect', async () => {
+      setSharingStatus('transferring')
+      for (let i = 0; i < filesRef.current.length; i++) await sendFile(peer, filesRef.current[i], i)
+      setSharingStatus('complete')
+    })
+    peer.on('error', () => setSharingStatus('error'))
+  }, [socket, sendFile, iceServers])
+
+  const handleFileShareReady = useCallback(({ from }) => {
+    console.log('📦 Link established. Intercepting payload from:', from)
+    const peer = new SimplePeer({ initiator: true, trickle: true, config: { iceServers } })
+    peersRef.current[from] = peer
+    peer.on('signal', signal => socket.emit('file-share-signal', { to: from, signal }))
+    
+    peer.on('data', data => {
+      if (expectingBinaryRef.current) {
+        const { fileIndex, index } = expectingBinaryRef.current
+        const fileData = chunksRef.current[fileIndex]
+        if (fileData) {
+          fileData.chunks[index] = new Uint8Array(data)
+          const progress = Math.round(((index + 1) / fileData.totalChunks) * 100)
+          setDownloadProgress(prev => ({ ...prev, [fileData.fileName]: progress }))
+        }
+        expectingBinaryRef.current = null; return
+      }
+
+      try {
+        const message = JSON.parse(data.toString())
+        if (message.type === 'file-meta') {
+          chunksRef.current[message.fileIndex] = { ...message, chunks: [] }
+          setDownloadProgress(prev => ({ ...prev, [message.fileName]: 0 }))
+        } else if (message.type === 'chunk-header') {
+          expectingBinaryRef.current = message
+        } else if (message.type === 'file-complete') {
+          const fileData = chunksRef.current[message.fileIndex]
+          if (fileData) fileData.blob = new Blob(fileData.chunks, { type: fileData.fileType })
+          const all = Object.values(chunksRef.current)
+          if (all.every(f => f.blob)) {
+            setSharingStatus('complete')
+            if (all.length > 1) {
+              const zip = new JSZip(); all.forEach(f => zip.file(f.fileName, f.blob))
+              zip.generateAsync({ type: 'blob' }).then(b => { 
+                const url = URL.createObjectURL(b); const a = document.createElement('a'); a.href = url; a.download = `payload.zip`; a.click() 
+              })
+            } else { 
+              const f = all[0]; const url = URL.createObjectURL(f.blob); const a = document.createElement('a'); a.href = url; a.download = f.fileName; a.click() 
+            }
+          }
+        }
+      } catch (err) {}
+    })
+    peer.on('connect', () => setSharingStatus('transferring'))
+    peer.on('error', () => setSharingStatus('error'))
+  }, [socket, iceServers])
+
+  // 4. Effects
+  
   useEffect(() => {
     const fetchIceServers = async () => {
       try {
@@ -45,223 +189,20 @@ export default function FileShare({ socket }) {
     fetchIceServers()
   }, [])
 
-  // Generate random 8-digit code
-  const generateShareCode = () => {
-    return Math.random().toString(36).substring(2, 10).toUpperCase()
-  }
-
-  // Send file via WebRTC
-  const sendFile = useCallback(async (peer, file, fileIndex) => {
-    const chunkSize = 64 * 1024 
-    const totalChunks = Math.ceil(file.size / chunkSize)
-    
-    // Header
-    peer.send(JSON.stringify({
-      type: 'file-meta',
-      fileIndex,
-      fileName: file.name,
-      fileSize: file.size,
-      fileType: file.type,
-      totalChunks
-    }))
-    
-    const bufferThreshold = 64 * 1024
-    
-    for (let index = 0; index < totalChunks; index++) {
-      try {
-        const start = index * chunkSize
-        const end = Math.min(start + chunkSize, file.size)
-        const chunk = await file.slice(start, end).arrayBuffer()
-        
-        peer.send(JSON.stringify({
-          type: 'chunk-header',
-          fileIndex,
-          index,
-          total: totalChunks,
-          size: chunk.byteLength
-        }))
-        
-        await new Promise(resolve => setTimeout(resolve, 1))
-        peer.send(chunk)
-        
-        if (peer._channel && peer._channel.bufferedAmount > bufferThreshold) {
-          await new Promise(resolve => {
-            const checkBuffer = () => {
-              if (peer._channel.bufferedAmount <= bufferThreshold) resolve()
-              else setTimeout(checkBuffer, 10)
-            }
-            checkBuffer()
-          })
-        }
-        
-        if (index % 10 === 0 || index === totalChunks - 1) {
-          const progress = Math.round(((index + 1) / totalChunks) * 100)
-          setUploadProgress(prev => ({ ...prev, [file.name]: progress }))
-        }
-      } catch (err) {
-        console.error(`❌ Error sending chunk ${index}:`, err)
-        break
-      }
-    }
-
-    peer.send(JSON.stringify({ type: 'file-complete', fileIndex, fileName: file.name }))
-  }, [])
-
-  const handleFileSelect = (e) => {
-    const files = Array.from(e.target.files)
-    if (files.length === 0) return
-    const totalSize = files.reduce((sum, file) => sum + file.size, 0)
-    if (totalSize > 10 * 1024 * 1024 * 1024) {
-      alert('Total file size exceeds 10GB limit')
-      return
-    }
-    setSelectedFiles(files)
-    filesRef.current = files
-    const code = generateShareCode()
-    setShareCode(code)
-    setMode('sharing')
-    setSharingStatus('waiting')
-    socket.emit('file-share-create', {
-      code,
-      files: files.map(f => ({ name: f.name, size: f.size, type: f.type }))
-    })
-    e.target.value = null
-  }
-
-  const joinFileShare = () => {
-    if (!inputCode.trim() || inputCode.length !== 8) return
-    setMode('receiving')
-    setSharingStatus('waiting')
-    socket.emit('file-share-join', { code: inputCode.toUpperCase() })
-  }
-
-  const copyShareCode = async () => {
-    await navigator.clipboard.writeText(shareCode)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  const cancelTransfer = useCallback(() => {
-    Object.values(peersRef.current).forEach(peer => peer?.destroy?.())
-    peersRef.current = {}
-    setMode('idle')
-    setSharingStatus('idle')
-    setShareCode('')
-    setInputCode('')
-    setSelectedFiles([])
-    setPendingFiles([])
-    setDownloadProgress({})
-    setUploadProgress({})
-    chunksRef.current = {}
-    expectingBinaryRef.current = null
-    if (shareCode) socket.emit('file-share-cancel', { code: shareCode })
-  }, [socket, shareCode])
-
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes'
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-  }
-
   useEffect(() => {
     if (!socket) return
-
-    const handleFileShareInfo = ({ files, hostId }) => {
-      setPendingFiles(files)
-      setPeerId(hostId)
-      setSharingStatus('ready')
-    }
-
-    const handleFileShareRequest = ({ from }) => {
-      const peer = new SimplePeer({ 
-        initiator: false, 
-        trickle: true,
-        config: { iceServers }
-      })
-      peersRef.current[from] = peer
-      peer.on('signal', signal => socket.emit('file-share-signal', { to: from, signal }))
-      peer.on('connect', async () => {
-        setSharingStatus('transferring')
-        for (let i = 0; i < filesRef.current.length; i++) await sendFile(peer, filesRef.current[i], i)
-        setSharingStatus('complete')
-      })
-      peer.on('error', () => setSharingStatus('error'))
-    }
-
-    const handleFileShareReady = ({ from }) => {
-      const peer = new SimplePeer({ 
-        initiator: true, 
-        trickle: true,
-        config: { iceServers }
-      })
-      peersRef.current[from] = peer
-      peer.on('signal', signal => socket.emit('file-share-signal', { to: from, signal }))
-      
-      peer.on('data', data => {
-        if (expectingBinaryRef.current) {
-          const { fileIndex, index } = expectingBinaryRef.current
-          const fileData = chunksRef.current[fileIndex]
-          if (fileData) {
-            fileData.chunks[index] = new Uint8Array(data)
-            const progress = Math.round(((index + 1) / fileData.totalChunks) * 100)
-            setDownloadProgress(prev => ({ ...prev, [fileData.fileName]: progress }))
-          }
-          expectingBinaryRef.current = null
-          return
-        }
-
-        try {
-          const message = JSON.parse(data.toString())
-          if (message.type === 'file-meta') {
-            chunksRef.current[message.fileIndex] = { ...message, chunks: [] }
-            setDownloadProgress(prev => ({ ...prev, [message.fileName]: 0 }))
-          } else if (message.type === 'chunk-header') {
-            expectingBinaryRef.current = message
-          } else if (message.type === 'file-complete') {
-            const fileData = chunksRef.current[message.fileIndex]
-            if (fileData) fileData.blob = new Blob(fileData.chunks, { type: fileData.fileType })
-            const allFilesData = Object.values(chunksRef.current)
-            if (allFilesData.every(f => f.blob)) {
-              setSharingStatus('complete')
-              if (allFilesData.length > 1) {
-                const zip = new JSZip()
-                allFilesData.forEach(f => zip.file(f.fileName, f.blob))
-                zip.generateAsync({ type: 'blob' }).then(blob => {
-                  const url = URL.createObjectURL(blob)
-                  const a = document.createElement('a')
-                  a.href = url; a.download = `payload.zip`; a.click()
-                })
-              } else {
-                const f = allFilesData[0]
-                const url = URL.createObjectURL(f.blob)
-                const a = document.createElement('a')
-                a.href = url; a.download = f.fileName; a.click()
-              }
-            }
-          }
-        } catch (err) {}
-      })
-      peer.on('connect', () => setSharingStatus('transferring'))
-      peer.on('error', () => setSharingStatus('error'))
-    }
-
     const handleSignal = ({ from, signal }) => peersRef.current[from]?.signal(signal)
-    
     socket.on('file-share-info', handleFileShareInfo)
     socket.on('file-share-request', handleFileShareRequest)
     socket.on('file-share-ready', handleFileShareReady)
     socket.on('file-share-signal', handleSignal)
-    
     return () => {
-      socket.off('file-share-info')
-      socket.off('file-share-request')
-      socket.off('file-share-ready')
-      socket.off('file-share-signal')
+      socket.off('file-share-info'); socket.off('file-share-request'); socket.off('file-share-ready'); socket.off('file-share-signal')
     }
-  }, [socket, sendFile, iceServers])
+  }, [socket, handleFileShareInfo, handleFileShareRequest, handleFileShareReady])
 
+  // 5. Render
+  
   return (
     <div className="w-full max-w-4xl mx-auto p-4 sm:p-8 min-h-[600px] flex flex-col bg-[#0F172A] text-slate-200">
       <div className="flex items-center justify-between mb-12 shrink-0">
@@ -307,7 +248,7 @@ export default function FileShare({ socket }) {
                    <span key={i} className="w-12 h-14 bg-white/5 rounded-xl border border-white/10 flex items-center justify-center text-3xl font-bold text-white font-mono shadow-inner">{char}</span>
                  ))}
                </div>
-               <button onClick={copyShareCode} className="mt-8 text-[10px] font-bold text-slate-500 hover:text-white transition-colors flex items-center gap-2 mx-auto uppercase tracking-widest">
+               <button onClick={() => { navigator.clipboard.writeText(shareCode); setCopied(true); setTimeout(() => setCopied(false), 2000) }} className="mt-8 text-[10px] font-bold text-slate-500 hover:text-white transition-colors flex items-center gap-2 mx-auto uppercase tracking-[0.2em]">
                  {copied ? <><Check size={12} className="text-green-400" /> Copied</> : <><Copy size={12} /> Copy Coordinates</>}
                </button>
             </div>
@@ -315,27 +256,19 @@ export default function FileShare({ socket }) {
               <div className="px-6 py-4 border-b border-white/5 bg-white/5 flex items-center justify-between"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cargo Manifest</span><span className="text-[10px] text-slate-500 font-mono">{selectedFiles.length} OBJECTS</span></div>
               <div className="p-4 space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
                 {selectedFiles.map((file, i) => (
-                  <div key={i} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 animate-in slide-in-from-left duration-300">
+                  <div key={i} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
                     <div className="flex items-center gap-4"><div className="p-2.5 bg-violet-500/10 rounded-xl"><FileIcon className="h-4 w-4 text-violet-400" /></div><div className="flex flex-col"><span className="text-sm font-bold text-white truncate max-w-[200px]">{file.name}</span><span className="text-[9px] text-slate-600 font-bold uppercase tracking-widest mt-0.5">{formatFileSize(file.size)}</span></div></div>
                     {uploadProgress[file.name] > 0 && <div className="flex items-center gap-4"><span className="text-xs font-mono font-bold text-violet-400">{uploadProgress[file.name]}%</span><div className="w-24 h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5"><motion.div animate={{ width: `${uploadProgress[file.name]}%` }} className="h-full bg-violet-500 shadow-[0_0_10px_rgba(139,92,246,0.5)]" /></div></div>}
                   </div>
                 ))}
               </div>
             </div>
-
-            {sharingStatus === 'waiting' && (
-              <div className="flex flex-col items-center justify-center gap-4 py-4 opacity-50">
-                <Loader className="h-6 w-6 text-violet-500 animate-spin" />
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] animate-pulse">Awaiting Intercept...</span>
-              </div>
-            )}
           </motion.div>
         )}
 
         {mode === 'receiving' && (
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-8 flex-1">
             <div className="glass-card p-8 border-cyan-500/20 bg-cyan-500/[0.02] flex items-center justify-between relative overflow-hidden">
-              <div className="absolute -left-10 -bottom-10 w-32 h-32 bg-cyan-500/5 rounded-full blur-3xl" />
               <div><p className="text-cyan-400 text-[9px] font-bold tracking-[0.4em] uppercase mb-2">Target Coordinates</p><p className="text-3xl font-mono font-bold text-white tracking-[0.4em]">{inputCode}</p></div>
               <div className="px-5 py-2.5 bg-cyan-500/10 rounded-2xl border border-cyan-500/20 text-cyan-400 text-[10px] font-bold tracking-widest shadow-lg shadow-cyan-500/10">LINK SECURED</div>
             </div>

@@ -23,7 +23,7 @@ const app = express();
 const server = createServer(app);
 
 app.use(cors({
-  origin: true, // Allow all origins in development for tunnel compatibility
+  origin: true, 
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -44,7 +44,7 @@ try {
   console.log('✅ Connected to MongoDB');
   usingMongoDB = true;
 } catch (error) {
-  console.log('⚠️  MongoDB not available, using in-memory database');
+  console.log('⚠️  Using in-memory database');
 }
 
 app.locals.usingMongoDB = usingMongoDB;
@@ -60,19 +60,11 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Get ICE servers configuration (STUN/TURN)
 app.get('/api/ice-servers', authenticateToken, (req, res) => {
-  // In a real production app, these would come from environment variables
-  // or a service like Twilio/Xirsys/Metered.ca with dynamic credentials
   res.json({
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' },
-      { urls: 'stun:stun3.l.google.com:19302' },
-      { urls: 'stun:stun4.l.google.com:19302' },
-      { urls: 'stun:stun.services.mozilla.com' },
-      { urls: 'stun:stun.stunprotocol.org:3478' },
       {
         urls: process.env.TURN_SERVER_URL || 'turn:openrelay.metered.ca:80',
         username: process.env.TURN_SERVER_USERNAME || 'openrelayproject',
@@ -85,30 +77,24 @@ app.get('/api/ice-servers', authenticateToken, (req, res) => {
 app.get('/api/messages/:userId', authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
-    const currentUserId = req.user._id || req.user.id;
+    const currentUserId = (req.user._id || req.user.id).toString();
     
     let messages;
     if (usingMongoDB) {
       messages = await Message.find({
-        $or: [
-          { from: currentUserId, to: userId },
-          { from: userId, to: currentUserId }
-        ]
-      })
-      .sort({ timestamp: 1 })
-      .limit(100)
-      .populate('from to', 'username email');
+        $or: [ { from: currentUserId, to: userId }, { from: userId, to: currentUserId } ]
+      }).sort({ timestamp: 1 }).limit(100).populate('from to', 'username email');
     } else {
-      messages = await inMemoryDb.getMessages(currentUserId.toString(), userId);
-      messages = messages.map(msg => {
-        const fromUser = inMemoryDb.findUserById(msg.from);
-        const toUser = inMemoryDb.findUserById(msg.to);
+      const rawMessages = await inMemoryDb.getMessages(currentUserId, userId.toString());
+      messages = await Promise.all(rawMessages.map(async msg => {
+        const fromUser = await inMemoryDb.findUserById(msg.from);
+        const toUser = await inMemoryDb.findUserById(msg.to);
         return {
           ...msg,
           from: fromUser ? { id: fromUser._id, username: fromUser.username } : null,
           to: toUser ? { id: toUser._id, username: toUser.username } : null
         };
-      });
+      }));
     }
     res.json({ messages });
   } catch (error) {
@@ -118,7 +104,7 @@ app.get('/api/messages/:userId', authenticateToken, async (req, res) => {
 
 app.get('/api/conversations', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user._id || req.user.id;
+    const userId = (req.user._id || req.user.id).toString();
     let conversations;
     if (usingMongoDB) {
       const userObjectId = new mongoose.Types.ObjectId(userId);
@@ -135,15 +121,15 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
         { $project: { user: { id: '$user._id', username: '$user.username' }, lastMessage: 1, unreadCount: 1 } }
       ]);
     } else {
-      conversations = await inMemoryDb.getConversations(userId.toString());
-      conversations = conversations.map(conv => {
-        const user = inMemoryDb.findUserById(conv.userId);
+      const rawConversations = await inMemoryDb.getConversations(userId);
+      conversations = await Promise.all(rawConversations.map(async conv => {
+        const user = await inMemoryDb.findUserById(conv.userId);
         return {
           user: user ? { id: user._id, username: user.username } : null,
           lastMessage: conv.lastMessage,
           unreadCount: conv.unreadCount
         };
-      });
+      }));
     }
     res.json({ conversations: conversations.filter(c => c.user) });
   } catch (error) {
@@ -167,7 +153,6 @@ app.get('/api/users/search', authenticateToken, async (req, res) => {
   res.json({ users });
 });
 
-// Initialize Socket.io
 initSocket(server, usingMongoDB);
 
 server.listen(PORT, '0.0.0.0', () => {

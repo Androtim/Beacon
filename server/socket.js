@@ -7,18 +7,18 @@ import inMemoryDb from './utils/inMemoryDb.js';
 export default function initSocket(server, usingMongoDB) {
   const io = new Server(server, {
     cors: {
-      origin: true, // Absolute permission for development tunnel
+      origin: true,
       methods: ["GET", "POST"],
       credentials: true
     },
     transports: ['polling', 'websocket'],
-    pingTimeout: 120000, // Increased for mobile stability
+    pingTimeout: 120000,
     pingInterval: 30000
   });
 
   io.use(async (socket, next) => {
     const token = socket.handshake.auth.token || socket.handshake.query.token;
-    if (!token) return next(new Error('Auth error'));
+    if (!token) return next(new Error('Authentication error'));
     try {
       const secret = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production';
       const decoded = jwt.verify(token, secret);
@@ -30,6 +30,7 @@ export default function initSocket(server, usingMongoDB) {
   });
 
   const rooms = new Map();
+  const fileShares = new Map();
   const onlineUsers = new Map();
 
   io.on('connection', (socket) => {
@@ -88,13 +89,27 @@ export default function initSocket(server, usingMongoDB) {
       if (rec) io.to(rec.socketId).emit('private-message', { from: { id: userId, username }, message, timestamp });
     });
 
+    // Generic File Share
+    socket.on('file-share-create', (data) => {
+      const { code, files } = data;
+      fileShares.set(code, { hostId: socket.id, files, expiresAt: Date.now() + 1800000 });
+    });
+    socket.on('file-share-join', (data) => {
+      const share = fileShares.get(data.code);
+      if (share && share.expiresAt > Date.now()) socket.emit('file-share-info', { files: share.files, hostId: share.hostId, code: data.code });
+      else socket.emit('file-share-error', { message: 'Expired or invalid code' });
+    });
+    socket.on('file-share-request', (data) => { io.to(data.to).emit('file-share-request', { from: socket.id }); });
+    socket.on('file-share-ready', (data) => { io.to(data.to).emit('file-share-ready', { from: socket.id, fileInfo: data.fileInfo }); });
+    socket.on('file-share-signal', (data) => { io.to(data.to).emit('file-share-signal', { from: socket.id, signal: data.signal }); });
+
+    // Video Party Share
     socket.on('video-file-share', (data) => {
       if (!rooms.has(data.roomId)) return;
       const room = rooms.get(data.roomId);
       room.fileShare = { fileInfo: data.fileInfo, hostId: socket.id };
       socket.to(data.roomId).emit('video-file-info', { fileInfo: data.fileInfo, hostId: socket.id });
     });
-    
     socket.on('video-file-request', (data) => { io.to(data.to).emit('video-file-request', { from: socket.id }); });
     socket.on('video-file-ready', (data) => { io.to(data.to).emit('video-file-ready', { from: socket.id, fileInfo: data.fileInfo }); });
     socket.on('video-file-signal', (data) => { io.to(data.to).emit('video-file-signal', { from: socket.id, signal: data.signal }); });
