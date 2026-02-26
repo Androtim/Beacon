@@ -17,14 +17,17 @@ export default defineConfig({
   server: {
     port: 3000,
     strictPort: true,
-    allowedHosts: ['combining-used-equity-adaptive.trycloudflare.com'],
+    allowedHosts: [
+      'acid-former-gulf-impression.trycloudflare.com',
+      '.trycloudflare.com'
+    ],
     proxy: {
       '/api': {
         target: 'http://localhost:3001',
         changeOrigin: true
       },
-      '/socket.io': {
-        target: 'http://localhost:3001',
+      '/ws': {
+        target: 'http://localhost:8080',
         ws: true
       }
     }

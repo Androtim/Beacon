@@ -1,43 +1,34 @@
 import { useEffect, useRef, useState } from 'react'
-import { io } from 'socket.io-client'
+import { SignalingClient } from '../lib/SignalingClient'
 import { useAuth } from '../context/AuthContext'
 
-export function useSocket(serverUrl = window.location.origin) {
+export function useSocket(serverUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`) {
   const socketRef = useRef()
   const [connected, setConnected] = useState(false)
   const { user } = useAuth()
 
   useEffect(() => {
     console.log('🔌 Initializing socket connection to:', serverUrl)
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('token') || 'demo-token'
     
-    socketRef.current = io(serverUrl, {
-      timeout: 20000,
-      transports: ['polling', 'websocket'],
-      forceNew: true,
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-      withCredentials: true,
-      auth: {
-        token: token
-      }
-    })
-
+    socketRef.current = new SignalingClient(serverUrl)
+    
     socketRef.current.on('connect', () => {
-      console.log('✅ Connected to server:', socketRef.current.id)
+      console.log('✅ Socket connected')
       setConnected(true)
     })
 
-    socketRef.current.on('disconnect', (reason) => {
-      console.log('❌ Disconnected from server:', reason)
+    socketRef.current.on('disconnect', () => {
+      console.log('❌ Socket disconnected')
       setConnected(false)
     })
 
-    socketRef.current.on('connect_error', (error) => {
-      console.error('❌ Connection error:', error.message)
+    socketRef.current.on('error', (error) => {
+      console.error('❌ Socket error:', error)
       setConnected(false)
     })
+
+    socketRef.current.connect(token)
 
     return () => {
       if (socketRef.current) {
@@ -46,7 +37,7 @@ export function useSocket(serverUrl = window.location.origin) {
     }
   }, [serverUrl, user])
 
-  // Add connected property to socket for backward compatibility
+  // Backward compatibility properties
   if (socketRef.current) {
     socketRef.current.connected = connected
     socketRef.current.connectionStatus = connected

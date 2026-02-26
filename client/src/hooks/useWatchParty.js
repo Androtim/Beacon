@@ -14,23 +14,8 @@ export function useWatchParty(roomId, user) {
   })
   const [fileShare, setFileShare] = useState(null)
 
-  const [serverOffset, setServerOffset] = useState(0)
-
-  // Clock Synchronization Protocol
-  const syncClock = useCallback(() => {
-    if (!socket) return
-    const start = Date.now()
-    socket.emit('get-server-time', (serverTime) => {
-      const end = Date.now()
-      const rtt = end - start
-      const offset = serverTime - (end - rtt / 2)
-      setServerOffset(offset)
-      console.log(`⏱️ Clock sync: RTT=${rtt}ms, Offset=${offset}ms`)
-    })
-  }, [socket])
-
-  // Get current synchronized time
-  const getSyncedTime = useCallback(() => Date.now() + serverOffset, [serverOffset])
+  // Clock sync temporarily disabled/local only for Go migration
+  const getSyncedTime = useCallback(() => Date.now(), [])
 
   // Join room on mount
   useEffect(() => {
@@ -38,24 +23,21 @@ export function useWatchParty(roomId, user) {
       return
     }
 
-    // Initial clock sync
-    syncClock()
-    const syncInterval = setInterval(syncClock, 30000) // Re-sync every 30s
-
     console.log('🏠 Joining room:', roomId, 'as user:', user.username)
-    socket.emit('join-room', {
-      roomId,
-      user: {
-        id: user.id,
-        username: user.username
-      }
-    })
+    // Use the new join method from SignalingClient
+    if (socket.join) {
+        socket.join(roomId, user.id, { username: user.username })
+    } else {
+        // Fallback if socket isn't fully initialized yet or wrong type
+        console.warn('Socket does not support join method')
+    }
 
     return () => {
-      clearInterval(syncInterval)
-      socket.emit('leave-room', { roomId, userId: user.id })
+      if (socket.leave) {
+        socket.leave()
+      }
     }
-  }, [socket, roomId, user, syncClock])
+  }, [socket, roomId, user])
 
   // Set up socket event listeners
   useEffect(() => {

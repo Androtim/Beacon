@@ -173,8 +173,8 @@ export default function FileSharing({ socket, roomId }) {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-6 space-y-4">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">File Sharing</h3>
+    <div className="bg-[#1A1A1A] border border-white/5 rounded-none p-6 space-y-6 font-mono">
+      <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4">LEGACY_PAYLOAD_SYSTEM</h3>
       
       <div className="space-y-4">
         <div>
@@ -187,25 +187,25 @@ export default function FileSharing({ socket, roomId }) {
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="w-full btn-primary flex items-center justify-center gap-2"
+            className="w-full glass-button flex items-center justify-center gap-2"
           >
             <Upload className="h-4 w-4" />
-            Select Files to Share
+            SELECT_CARGO
           </button>
         </div>
 
         {shareCode && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-sm text-blue-800 mb-2">Share this code with others:</p>
+          <div className="bg-orange-500/5 border border-orange-500/20 rounded-none p-4">
+            <p className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-2">BROADCAST_COORDINATES:</p>
             <div className="flex items-center gap-2">
-              <code className="flex-1 bg-white px-3 py-2 rounded border border-blue-300 font-mono text-lg text-center">
+              <code className="flex-1 bg-black/40 px-3 py-2 rounded-none border border-white/10 font-mono text-lg text-center text-white">
                 {shareCode}
               </code>
               <button
                 onClick={copyShareCode}
-                className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                className="p-2 text-slate-500 hover:text-white transition-colors"
               >
-                {copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
+                {copied ? <Check className="h-5 w-5 text-green-500" /> : <Copy className="h-5 w-5" />}
               </button>
             </div>
           </div>
@@ -214,34 +214,33 @@ export default function FileSharing({ socket, roomId }) {
         <div className="flex gap-2">
           <input
             type="text"
-            placeholder="Enter share code"
+            placeholder="COORDINATES"
             value={joinCode}
             onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-            className="flex-1 input-field"
+            className="flex-1 glass-input !py-2 text-[10px]"
           />
           <button
             onClick={joinFileShare}
             disabled={!joinCode.trim()}
-            className="btn-secondary flex items-center gap-2 disabled:opacity-50"
+            className="glass-button !py-2 !px-4 disabled:opacity-50"
           >
             <Download className="h-4 w-4" />
-            Download
           </button>
         </div>
 
         {files.length > 0 && (
           <div className="space-y-2">
-            <h4 className="text-sm font-medium text-gray-700">Shared Files</h4>
+            <h4 className="text-[9px] font-black text-slate-600 uppercase tracking-widest">MANIFEST</h4>
             {files.map(file => (
-              <div key={file.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <File className="h-5 w-5 text-gray-400" />
+              <div key={file.id} className="flex items-center gap-3 p-3 bg-white/[0.02] border border-white/5">
+                <File className="h-4 w-4 text-orange-500" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
-                  <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
+                  <p className="text-[10px] font-bold text-white truncate uppercase">{file.name}</p>
+                  <p className="text-[9px] text-slate-700 font-black">{formatFileSize(file.size)}</p>
                 </div>
                 <button
                   onClick={() => setFiles(prev => prev.filter(f => f.id !== file.id))}
-                  className="p-1 text-gray-400 hover:text-red-600"
+                  className="p-1 text-slate-700 hover:text-red-500"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -252,16 +251,16 @@ export default function FileSharing({ socket, roomId }) {
 
         {activeTransfers.length > 0 && (
           <div className="space-y-2">
-            <h4 className="text-sm font-medium text-gray-700">Active Transfers</h4>
+            <h4 className="text-[9px] font-black text-slate-600 uppercase tracking-widest">ACTIVE_TRANSFERS</h4>
             {activeTransfers.map(transfer => (
-              <div key={transfer.id} className="p-3 bg-gray-50 rounded-lg">
+              <div key={transfer.id} className="p-3 bg-white/[0.02] border border-white/5">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-900 truncate">{transfer.name}</span>
-                  <span className="text-xs text-gray-500">{transfer.progress}%</span>
+                  <span className="text-[10px] font-bold text-white truncate uppercase">{transfer.name}</span>
+                  <span className="text-[10px] font-black text-orange-500">{transfer.progress}%</span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="w-full bg-white/5 rounded-none h-1">
                   <div
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    className="bg-orange-500 h-full transition-all duration-300"
                     style={{ width: `${transfer.progress}%` }}
                   />
                 </div>

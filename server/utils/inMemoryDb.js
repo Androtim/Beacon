@@ -43,21 +43,25 @@ class InMemoryDatabase {
   }
 
   save() {
-    try {
-      const dir = path.dirname(this.dbPath);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
+    if (this.saveTimeout) clearTimeout(this.saveTimeout);
+    
+    this.saveTimeout = setTimeout(() => {
+      try {
+        const dir = path.dirname(this.dbPath);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+        
+        const data = {
+          users: Array.from(this.users.values()),
+          messages: Array.from(this.messages.values())
+        };
+        
+        fs.writeFileSync(this.dbPath, JSON.stringify(data, null, 2));
+      } catch (err) {
+        console.error('❌ Error saving database:', err);
       }
-      
-      const data = {
-        users: Array.from(this.users.values()),
-        messages: Array.from(this.messages.values())
-      };
-      
-      fs.writeFileSync(this.dbPath, JSON.stringify(data, null, 2));
-    } catch (err) {
-      console.error('❌ Error saving database:', err);
-    }
+    }, 500); // 500ms debounce
   }
 
   async createUser(userData) {

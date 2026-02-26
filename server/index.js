@@ -9,14 +9,19 @@ import User from './models/User.js';
 import Message from './models/Message.js';
 import inMemoryDb from './utils/inMemoryDb.js';
 import initSocket from './socket.js';
+import fs from 'fs';
+import path from 'path';
+
+console.log(`Current Working Directory: ${process.cwd()}`);
+console.log(`.env exists here: ${fs.existsSync(path.join(process.cwd(), '.env'))}`);
 
 dotenv.config();
 
 // Security: Check for JWT_SECRET
 if (!process.env.JWT_SECRET) {
-  console.warn('⚠️  WARNING: JWT_SECRET is not set in environment variables.');
-  console.warn('⚠️  Falling back to a default secret for development. CHANGE THIS IN PRODUCTION!');
-  process.env.JWT_SECRET = 'your-super-secret-jwt-key-change-this-in-production';
+  console.error('❌ ERROR: JWT_SECRET is not set in environment variables.');
+  console.error('The server cannot start without a secure JWT_SECRET.');
+  process.exit(1);
 }
 
 const app = express();
@@ -61,17 +66,20 @@ app.get('/api/health', (req, res) => {
 });
 
 app.get('/api/ice-servers', authenticateToken, (req, res) => {
-  res.json({
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-      {
-        urls: process.env.TURN_SERVER_URL || 'turn:openrelay.metered.ca:80',
-        username: process.env.TURN_SERVER_USERNAME || 'openrelayproject',
-        credential: process.env.TURN_SERVER_PASSWORD || 'openrelayproject'
-      }
-    ]
-  });
+  const iceServers = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' }
+  ];
+
+  if (process.env.TURN_SERVER_URL) {
+    iceServers.push({
+      urls: process.env.TURN_SERVER_URL,
+      username: process.env.TURN_SERVER_USERNAME,
+      credential: process.env.TURN_SERVER_PASSWORD
+    });
+  }
+
+  res.json({ iceServers });
 });
 
 app.get('/api/messages/:userId', authenticateToken, async (req, res) => {
@@ -139,12 +147,14 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
 
 app.get('/api/users/search', authenticateToken, async (req, res) => {
   const { query } = req.query;
-  const searchQuery = query?.trim().toLowerCase();
+  if (typeof query !== 'string') return res.status(400).json({ message: 'Search query required' });
+  const searchQuery = query.trim().toLowerCase();
   if (!searchQuery) return res.status(400).json({ message: 'Search query required' });
 
   let users;
   if (usingMongoDB) {
-    users = await User.find({ username: { $regex: searchQuery, $options: 'i' } }).select('-password');
+    const escapedQuery = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    users = await User.find({ username: { $regex: escapedQuery, $options: 'i' } }).select('-password');
   } else {
     users = Array.from(inMemoryDb.users.values())
       .filter(u => u.username.toLowerCase().includes(searchQuery))

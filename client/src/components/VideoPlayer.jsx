@@ -171,10 +171,10 @@ export default function VideoPlayer({
 
   if (error) {
     return (
-      <div className="w-full aspect-video bg-gray-800 flex items-center justify-center">
-        <div className="text-center text-white p-4">
-          <p className="text-red-400 mb-2">⚠️ Video Error</p>
-          <p className="text-sm">{error}</p>
+      <div className="w-full h-full flex items-center justify-center bg-[#121212] border border-red-500/20 font-mono">
+        <div className="text-center p-8">
+          <p className="text-red-500 text-xs font-black uppercase tracking-[0.2em] mb-4">!! ACCESS_DENIED !!</p>
+          <p className="text-slate-500 text-[10px] uppercase font-bold">{error}</p>
         </div>
       </div>
     )
@@ -185,17 +185,17 @@ export default function VideoPlayer({
     
     if (!embedUrl) {
       return (
-        <div className="w-full aspect-video bg-gray-800 flex items-center justify-center">
-          <div className="text-center text-white p-4">
-            <p className="text-red-400">Invalid YouTube URL</p>
+        <div className="w-full h-full flex items-center justify-center bg-[#121212] border border-red-500/20 font-mono">
+          <div className="text-center p-8">
+            <p className="text-red-500 text-xs font-black uppercase tracking-[0.2em]">INVALID_COORDINATES</p>
           </div>
         </div>
       )
     }
 
     return (
-      <div className="w-full">
-        <div className="aspect-video">
+      <div className="w-full h-full flex flex-col">
+        <div className="flex-1">
           <iframe
             ref={iframeRef}
             src={embedUrl}
@@ -203,13 +203,13 @@ export default function VideoPlayer({
             frameBorder="0"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
-            className="w-full h-full"
+            className="w-full h-full grayscale-[0.5] contrast-[1.2]"
           />
         </div>
-        <div className="bg-yellow-900/20 border border-yellow-600/50 rounded-lg p-3 mt-2">
-          <p className="text-yellow-400 text-sm flex items-center gap-2">
-            <span>⚠️</span>
-            <span>YouTube videos cannot be synchronized due to iframe security restrictions. For synchronized viewing, use direct video links (.mp4, .webm) or share local files.</span>
+        <div className="bg-orange-500/5 border-t border-orange-500/20 p-4 font-mono">
+          <p className="text-orange-500 text-[9px] font-black uppercase tracking-[0.1em] flex items-center gap-2">
+            <span className="animate-pulse">⚠</span>
+            <span>WARNING: PROTOCOL_RESTRICTION // YOUTUBE_IFRAME prevents P2P synchronization. Use direct links or local files for real-time sync.</span>
           </p>
         </div>
       </div>
@@ -227,6 +227,7 @@ export default function VideoPlayer({
             ref={videoRef}
             controls
             playsInline
+            autoPlay={false}
             className="w-full h-full object-contain"
             src={src}
             onLoadedMetadata={(e) => {

@@ -1,218 +1,220 @@
 import { useState, useEffect, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../hooks/useSocket'
-import { Send, User, Search, Circle, ArrowLeft, Loader, Video, MessageSquare, Zap, Shield, Plus, ChevronRight, Settings, LogOut } from 'lucide-react'
-import { Link, useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { Send, Search, User, ArrowLeft, MoreVertical } from 'lucide-react'
 import axios from 'axios'
 
 export default function Messages() {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const socket = useSocket()
-  const navigate = useNavigate()
-  const [searchResults, setSearchResults] = useState([])
+  const [conversations, setConversations] = useState([])
   const [selectedUser, setSelectedUser] = useState(null)
-  const [messages, setMessages] = useState({})
+  const [messages, setMessages] = useState([])
   const [newMessage, setNewMessage] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
-  const [isSearching, setIsSearching] = useState(false)
-  const [hasSearched, setHasSearched] = useState(false)
-  const [conversations, setConversations] = useState([]) 
-  const [loadingConversations, setLoadingConversations] = useState(true)
+  const [searchResults, setSearchResults] = useState([])
   const messagesEndRef = useRef(null)
-  const searchTimeoutRef = useRef(null)
 
-  const scrollToBottom = () => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }
-
-  useEffect(() => { scrollToBottom() }, [messages, selectedUser])
-  
   useEffect(() => {
-    const loadConversations = async () => {
-      try {
-        const res = await axios.get('/api/conversations')
-        const convUsers = res.data.conversations.map(c => ({ 
-          id: c.user.id || c.user._id,
-          username: c.user.username,
-          lastMessage: c.lastMessage, 
-          unreadCount: c.unreadCount 
-        }))
-        setConversations(convUsers)
-        
-        // Preload history for active conversations
-        convUsers.forEach(async (u) => {
-          if (!u.id) return
-          const mRes = await axios.get(`/api/messages/${u.id}`)
-          setMessages(prev => ({ ...prev, [u.id]: mRes.data.messages.map(m => ({ ...m, isOwn: (m.from.id || m.from._id) === user.id })) }))
-        })
-      } catch (e) { console.error(e) } finally { setLoadingConversations(false) }
+    fetchConversations()
+  }, [])
+
+  useEffect(() => {
+    if (selectedUser) {
+      fetchMessages(selectedUser.id)
     }
-    if (user?.id) loadConversations()
-  }, [user])
-  
-  useEffect(() => {
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
-    if (!searchQuery.trim()) { setSearchResults([]); setHasSearched(false); return }
-    searchTimeoutRef.current = setTimeout(async () => {
-      setIsSearching(true)
-      try {
-        const res = await axios.get(`/api/users/search?query=${searchQuery}`)
-        setSearchResults(res.data.users
-          .map(u => ({ ...u, id: u.id || u._id }))
-          .filter(u => u.id !== user.id)
-        )
-        setHasSearched(true)
-      } catch (e) { setSearchResults([]) } finally { setIsSearching(false) }
-    }, 500)
-  }, [searchQuery, user.id])
+  }, [selectedUser])
 
   useEffect(() => {
     if (!socket) return
+
     socket.on('private-message', ({ from, message, timestamp }) => {
-      const fromId = from.id || from._id
-      setMessages(prev => ({ ...prev, [fromId]: [...(prev[fromId] || []), { from, message, timestamp, isOwn: false }] }))
-      setConversations(prev => {
-        if (!prev.find(u => u.id === fromId)) return [...prev, { ...from, id: fromId }]
-        return prev
-      })
+      if (selectedUser && from === selectedUser.id) {
+        setMessages(prev => [...prev, { from: { id: from }, message, timestamp }])
+      }
+      fetchConversations()
     })
-    return () => { socket.off('private-message') }
-  }, [socket])
+
+    return () => socket.off('private-message')
+  }, [socket, selectedUser])
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  const fetchConversations = async () => {
+    try {
+      const res = await axios.get('/api/conversations')
+      setConversations(res.data.conversations)
+    } catch (err) {
+      console.error('Failed to fetch conversations')
+    }
+  }
+
+  const fetchMessages = async (userId) => {
+    try {
+      const res = await axios.get(`/api/messages/${userId}`)
+      setMessages(res.data.messages)
+    } catch (err) {
+      console.error('Failed to fetch messages')
+    }
+  }
+
+  const handleSearch = async (e) => {
+    const q = e.target.value
+    setSearchQuery(q)
+    if (q.length > 2) {
+      try {
+        const res = await axios.get(`/api/users/search?query=${q}`)
+        setSearchResults(res.data.users)
+      } catch (err) {}
+    } else {
+      setSearchResults([])
+    }
+  }
 
   const sendMessage = (e) => {
-    if (e) e.preventDefault()
-    if (!newMessage.trim() || !selectedUser) return
+    e.preventDefault()
+    if (!newMessage.trim() || !selectedUser || !socket) return
+
     const timestamp = Date.now()
     socket.emit('private-message', { to: selectedUser.id, message: newMessage, timestamp })
-    setMessages(prev => ({ ...prev, [selectedUser.id]: [...(prev[selectedUser.id] || []), { from: user, message: newMessage, timestamp, isOwn: true }] }))
-    if (!conversations.find(u => u.id === selectedUser.id)) setConversations(prev => [...prev, selectedUser])
+    setMessages(prev => [...prev, { from: { id: user.id }, message: newMessage, timestamp }])
     setNewMessage('')
-  }
-
-  const startWatchParty = () => {
-    const code = `OP-${Math.random().toString(36).substring(2, 6).toUpperCase()}`
-    const invite = `📡 OPERATOR INVITE: Establish Sync Coordinates. Link: ${code}`
-    socket.emit('private-message', { to: selectedUser.id, message: invite, timestamp: Date.now() })
-    setMessages(prev => ({ ...prev, [selectedUser.id]: [...(prev[selectedUser.id] || []), { from: user, message: invite, timestamp: Date.now(), isOwn: true }] }))
-    navigate(`/party/${code}`)
-  }
-
-  const formatTime = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-
-  const parseInvite = (msg) => {
-    const match = msg.match(/Coordinates\. Link: ([A-Z0-9-]+)/)
-    return match ? match[1] : null
+    fetchConversations()
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-[#0F172A] text-slate-200 selection:bg-violet-500/30">
-      <div className="orb w-[500px] h-[500px] bg-violet-600/10 top-[-200px] left-[-100px]" />
-      <div className="orb w-[400px] h-[400px] bg-cyan-500/10 bottom-[-100px] right-[-100px]" />
-
-      <div className="max-w-7xl mx-auto h-[100dvh] flex flex-col relative z-10 p-4 sm:p-6 lg:px-8">
-        <header className="glass-card px-6 py-4 flex items-center justify-between mb-8 border-white/5 shrink-0">
-          <div className="flex items-center gap-6">
-            <Link to="/" className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center hover:bg-white/10 border border-white/5 transition-all"><ArrowLeft className="h-5 w-5 text-slate-400" /></Link>
-            <div className="h-8 w-px bg-white/10 hidden sm:block" />
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-gradient-to-br from-violet-500 to-cyan-400 rounded-xl flex items-center justify-center shadow-lg shadow-violet-500/20"><MessageSquare className="h-5 w-5 text-white" /></div>
-              <h1 className="text-xl font-bold tracking-tighter text-white uppercase">Network Comms</h1>
-            </div>
+    <div className="container" style={{ maxWidth: '1200px', height: '100vh', padding: 0, display: 'flex' }}>
+      {/* Sidebar */}
+      <div style={{ width: '350px', borderRight: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', backgroundColor: 'white' }}>
+        <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+            <Link to="/" style={{ color: '#64748b' }}><ArrowLeft size={20} /></Link>
+            <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Network</h2>
           </div>
-        </header>
+          <div style={{ position: 'relative' }}>
+            <Search size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: '#94a3b8' }} />
+            <input 
+              type="text" 
+              className="input-field" 
+              style={{ paddingLeft: '2.5rem', marginBottom: 0, borderRadius: '24px', backgroundColor: '#f8fafc' }}
+              placeholder="Search operatives..."
+              value={searchQuery}
+              onChange={handleSearch}
+            />
+          </div>
+        </div>
 
-        <div className="flex-1 flex gap-6 min-h-0 overflow-hidden">
-          <aside className={`w-full lg:w-80 shrink-0 flex flex-col gap-6 ${selectedUser ? 'hidden lg:flex' : 'flex'}`}>
-            <div className="glass-card flex-1 flex flex-col overflow-hidden border-white/5 shadow-xl">
-              <div className="p-4 border-b border-white/5 bg-white/5">
-                <div className="relative group">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-focus-within:text-violet-400 transition-colors" />
-                  <input type="text" placeholder="SCAN OPERATORS..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="glass-input !pl-10 !py-3 text-[10px] font-mono uppercase tracking-widest" />
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {searchResults.length > 0 ? (
+            searchResults.map(u => (
+              <div 
+                key={u.id} 
+                onClick={() => { setSelectedUser(u); setSearchResults([]); setSearchQuery('') }}
+                style={{ padding: '1rem 1.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem', borderBottom: '1px solid #f1f5f9' }}
+              >
+                <div style={{ width: '40px', height: '40px', backgroundColor: '#e2e8f0', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <User size={20} style={{ color: '#64748b' }} />
+                </div>
+                <div style={{ fontWeight: 'bold' }}>{u.username}</div>
+              </div>
+            ))
+          ) : (
+            conversations.map(conv => (
+              <div 
+                key={conv.user.id} 
+                onClick={() => setSelectedUser(conv.user)}
+                style={{ 
+                  padding: '1rem 1.5rem', 
+                  cursor: 'pointer', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '1rem', 
+                  backgroundColor: selectedUser?.id === conv.user.id ? '#eff6ff' : 'transparent',
+                  borderBottom: '1px solid #f1f5f9'
+                }}
+              >
+                <div style={{ width: '48px', height: '48px', backgroundColor: '#dbeafe', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <User size={24} style={{ color: '#2563eb' }} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                    <span style={{ fontWeight: 'bold' }}>{conv.user.username}</span>
+                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{new Date(conv.lastMessage.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                  <div style={{ fontSize: '0.85rem', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {conv.lastMessage.message}
+                  </div>
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto custom-scrollbar">
-                {searchQuery ? (
-                  <div className="animate-in fade-in slide-in-from-top-1 duration-300">
-                    <div className="px-5 py-3 text-[9px] font-bold text-slate-500 uppercase tracking-[0.3em] bg-white/5">Scan Results</div>
-                    {searchResults.map(u => ( <UserItem key={u.id} user={u} active={selectedUser?.id === u.id} onClick={() => setSelectedUser(u)} /> ))}
-                  </div>
-                ) : (
-                  <div className="animate-in fade-in duration-500">
-                    <div className="px-5 py-3 text-[9px] font-bold text-slate-500 uppercase tracking-[0.3em] bg-white/5">Active Links</div>
-                    {loadingConversations ? ( <div className="p-8 text-center"><Loader className="h-6 w-6 text-violet-500 animate-spin mx-auto" /></div>
-                    ) : conversations.length > 0 ? ( conversations.map(u => ( <UserItem key={u.id} user={u} active={selectedUser?.id === u.id} onClick={() => setSelectedUser(u)} /> ))
-                    ) : ( <div className="p-10 text-center opacity-30"><Shield className="h-10 w-10 mx-auto mb-4" /><p className="text-[10px] font-bold uppercase tracking-widest">No Active Sessions</p></div> )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </aside>
-
-          <main className={`flex-1 flex flex-col min-w-0 ${selectedUser ? 'flex' : 'hidden lg:flex'}`}>
-            {selectedUser ? (
-              <div className="glass-card flex-1 flex flex-col overflow-hidden border-white/5 shadow-2xl animate-in zoom-in-95 duration-300">
-                <div className="px-6 py-4 border-b border-white/5 bg-white/5 flex items-center justify-between shadow-sm">
-                  <div className="flex items-center gap-4">
-                    <button onClick={() => setSelectedUser(null)} className="lg:hidden p-2 hover:bg-white/5 rounded-xl mr-2 border border-white/5"><ArrowLeft size={18} /></button>
-                    <div className="relative">
-                      <div className="w-11 h-11 bg-gradient-to-br from-violet-500/20 to-cyan-500/20 rounded-xl flex items-center justify-center border border-white/10"><User className="h-5 w-5 text-violet-400" /></div>
-                      <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-4 border-[#0F172A] ${selectedUser.isOnline ? 'bg-green-500' : 'bg-slate-600'}`} />
-                    </div>
-                    <div><p className="font-bold text-white uppercase tracking-tighter text-lg">{selectedUser.username}</p><p className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.2em]">{selectedUser.isOnline ? 'Link Active' : 'Offline'}</p></div>
-                  </div>
-                  <button onClick={startWatchParty} className="glass-button !py-2.5 !px-5 !from-violet-600 !to-violet-500 text-[10px] tracking-[0.2em] shadow-lg shadow-violet-500/20"><Video size={14} className="mr-2" /> INITIALIZE PARTY</button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-black/20 custom-scrollbar">
-                  {messages[selectedUser.id]?.map((msg, i) => {
-                    const inviteCode = parseInvite(msg.message)
-                    return (
-                      <div key={i} className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[85%] group flex flex-col ${msg.isOwn ? 'items-end' : 'items-start'}`}>
-                          <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-lg ${msg.isOwn ? 'bg-gradient-to-br from-violet-600 to-violet-500 text-white rounded-tr-none' : 'bg-white/5 text-slate-200 rounded-tl-none border border-white/5'}`}>
-                             {inviteCode ? (
-                               <div className="flex flex-col gap-3">
-                                 <p className="flex items-center gap-2"><Radio size={14} className="animate-pulse text-violet-400" /> {msg.message}</p>
-                                 <button onClick={() => navigate(`/party/${inviteCode}`)} className="w-full glass-button !from-cyan-500 !to-cyan-400 !py-2 text-[10px] uppercase font-black">Join Party</button>
-                               </div>
-                             ) : (
-                               <p className="whitespace-pre-wrap">{msg.message}</p>
-                             )}
-                          </div>
-                          <span className="text-[8px] font-mono text-slate-600 mt-1.5 px-1 opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-widest">{formatTime(msg.timestamp)}</span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                  <div ref={messagesEndRef} />
-                </div>
-                <form onSubmit={sendMessage} className="p-5 bg-white/5 border-t border-white/5 flex gap-4">
-                  <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="ENTER COMMAND..." className="flex-1 glass-input !py-4" />
-                  <button type="submit" disabled={!newMessage.trim()} className="w-14 h-14 glass-button !from-cyan-500 !to-cyan-400 shadow-cyan-500/20 active:scale-95 transition-transform"><Send size={22} /></button>
-                </form>
-              </div>
-            ) : (
-              <div className="glass-card flex-1 flex flex-col items-center justify-center text-center p-12 border-white/5 shadow-2xl">
-                <div className="w-24 h-24 bg-white/5 rounded-[3rem] flex items-center justify-center mb-10 border border-white/5 shadow-inner animate-pulse"><Zap className="h-10 w-10 text-slate-700" /></div>
-                <h3 className="text-2xl font-bold text-white uppercase tracking-tight">Operator Directory</h3>
-                <p className="text-slate-500 text-sm mt-4">Establish a point-to-point link with an active operator.</p>
-              </div>
-            )}
-          </main>
+            ))
+          )}
         </div>
       </div>
-    </div>
-  )
-}
 
-function UserItem({ user, active, onClick }) {
-  return (
-    <div onClick={onClick} className={`group flex items-center p-5 hover:bg-white/5 cursor-pointer transition-all border-l-2 relative overflow-hidden ${active ? 'bg-violet-500/5 border-violet-500' : 'border-transparent'}`}>
-      <div className="relative mr-5">
-        <div className={`w-11 h-11 bg-white/5 rounded-xl flex items-center justify-center border transition-all duration-300 ${active ? 'border-violet-500/50 shadow-lg' : 'border-white/5'}`}><User className={`h-5 w-5 ${active ? 'text-violet-400' : 'text-slate-500 group-hover:text-slate-300'}`} /></div>
-        <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-4 border-[#0F172A] ${user.isOnline ? 'bg-green-500' : 'bg-slate-600'}`} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className={`font-bold truncate text-sm uppercase tracking-tight transition-colors ${active ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>{user.username}</p>
-        <p className="text-[9px] text-slate-600 font-bold uppercase tracking-[0.2em] mt-1">{user.isOnline ? 'Online' : 'Offline'}</p>
+      {/* Chat Area */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: '#f8fafc' }}>
+        {selectedUser ? (
+          <>
+            <header style={{ padding: '1rem 2rem', backgroundColor: 'white', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ width: '40px', height: '40px', backgroundColor: '#dbeafe', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <User size={20} style={{ color: '#2563eb' }} />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 'bold' }}>{selectedUser.username}</div>
+                  <div style={{ fontSize: '0.75rem', color: '#22c55e' }}>Secure Channel Active</div>
+                </div>
+              </div>
+              <button style={{ background: 'none', border: 'none', color: '#94a3b8' }}><MoreVertical size={20} /></button>
+            </header>
+
+            <main style={{ flex: 1, overflowY: 'auto', padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {messages.map((msg, i) => {
+                const isMe = msg.from.id === user.id
+                return (
+                  <div key={i} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '70%' }}>
+                    <div style={{ 
+                      padding: '0.75rem 1.25rem', 
+                      borderRadius: '20px', 
+                      backgroundColor: isMe ? '#2563eb' : 'white',
+                      color: isMe ? 'white' : '#1e293b',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                      fontSize: '0.9375rem'
+                    }}>
+                      {msg.message}
+                    </div>
+                    <div style={{ fontSize: '0.65rem', color: '#94a3b8', marginTop: '0.25rem', textAlign: isMe ? 'right' : 'left' }}>
+                      {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                )
+              })}
+              <div ref={messagesEndRef} />
+            </main>
+
+            <form onSubmit={sendMessage} style={{ padding: '1.5rem 2rem', backgroundColor: 'white', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '1rem' }}>
+              <input 
+                type="text" 
+                className="input-field" 
+                style={{ marginBottom: 0, borderRadius: '24px', backgroundColor: '#f1f5f9' }}
+                placeholder="Message operative..."
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+              />
+              <button type="submit" className="btn btn-primary" style={{ borderRadius: '50%', width: '45px', height: '45px', padding: 0 }}>
+                <Send size={20} />
+              </button>
+            </form>
+          </>
+        ) : (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
+            <MessageSquare size={64} style={{ marginBottom: '1.5rem', opacity: 0.2 }} />
+            <p>Select a contact to begin secure transmission</p>
+          </div>
+        )}
       </div>
     </div>
   )
