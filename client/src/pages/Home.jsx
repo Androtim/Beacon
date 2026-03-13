@@ -29,22 +29,14 @@ export default function Home() {
     <div className="min-h-screen">
       <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
         {/* Navbar */}
-        <nav className="flex items-center justify-between h-20 border-b border-slate-200/60 mb-8">
-          <div className="flex items-center gap-8">
-            <Link to="/" className="flex items-center gap-3 group">
-              <div className="bg-blue-600 text-white p-2 rounded-xl shadow-lg shadow-blue-600/20 group-hover:scale-105 transition-transform">
-                <Radio size={20} className="fill-current" />
-              </div>
-              <span className="text-xl font-bold text-slate-900 tracking-tight">Beacon</span>
-            </Link>
-            
-            <div className="hidden md:flex bg-slate-100/50 p-1 rounded-xl border border-slate-200/60">
+        <div className="flex justify-center md:justify-start mb-8">
+            <div className="flex bg-slate-100/50 dark:bg-slate-800/50 p-1 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
               <button 
                 onClick={() => setActiveTab('watch')}
                 className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 ${
                   activeTab === 'watch' 
-                    ? 'bg-white text-blue-600 shadow-sm' 
-                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                    ? 'bg-white dark:bg-slate-900 dark:bg-slate-900 dark:bg-slate-100 text-blue-600 dark:text-blue-400 shadow-sm' 
+                    : 'text-slate-500 dark:text-slate-400 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
                 }`}
               >
                 <Tv size={16} />
@@ -54,8 +46,8 @@ export default function Home() {
                 onClick={() => setActiveTab('files')}
                 className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 ${
                   activeTab === 'files' 
-                    ? 'bg-white text-blue-600 shadow-sm' 
-                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                    ? 'bg-white dark:bg-slate-900 dark:bg-slate-900 dark:bg-slate-100 text-blue-600 dark:text-blue-400 shadow-sm' 
+                    : 'text-slate-500 dark:text-slate-400 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
                 }`}
               >
                 <FolderOpen size={16} />
@@ -63,24 +55,6 @@ export default function Home() {
               </button>
             </div>
           </div>
-
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:block text-right pr-4 border-r border-slate-200">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Operator</div>
-              <div className="text-sm font-bold text-slate-900">{user?.username}</div>
-            </div>
-            <Link to="/settings" className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all">
-              <Settings size={20} />
-            </Link>
-            <button 
-              onClick={logout} 
-              className="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-              title="Sign Out"
-            >
-              <LogOut size={20} />
-            </button>
-          </div>
-        </nav>
 
         {/* Main Content */}
         <main className="pb-12">
@@ -94,10 +68,10 @@ export default function Home() {
                 transition={{ duration: 0.2 }}
               >
                 <div className="mb-12 text-center md:text-left">
-                  <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight mb-3">
+                  <h1 className="text-4xl font-extrabold text-[var(--text-primary)] tracking-tight mb-3">
                     Establish Connection
                   </h1>
-                  <p className="text-lg text-slate-500 max-w-2xl">
+                  <p className="text-lg text-slate-500 dark:text-slate-400 max-w-2xl">
                     Sync video streams, chat in real-time, and share content with anyone, anywhere.
                   </p>
                 </div>
@@ -113,8 +87,8 @@ export default function Home() {
                       <Video size={28} />
                     </div>
                     
-                    <h3 className="text-xl font-bold text-slate-900 mb-2">Host New Party</h3>
-                    <p className="text-slate-500 mb-8 min-h-[3rem]">
+                    <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">Host New Party</h3>
+                    <p className="text-slate-500 dark:text-slate-400 mb-8 min-h-[3rem]">
                       Create a private, synchronized viewing space and invite friends via a secure link.
                     </p>
                     
@@ -133,8 +107,8 @@ export default function Home() {
                       <LayoutGrid size={28} />
                     </div>
                     
-                    <h3 className="text-xl font-bold text-slate-900 mb-2">Join Stream</h3>
-                    <p className="text-slate-500 mb-8 min-h-[3rem]">
+                    <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">Join Stream</h3>
+                    <p className="text-slate-500 dark:text-slate-400 mb-8 min-h-[3rem]">
                       Enter a unique 6-character room code to connect to an existing broadcast.
                     </p>
                     
@@ -150,7 +124,7 @@ export default function Home() {
                       <button 
                         type="submit" 
                         disabled={!partyCode.trim()} 
-                        className="btn bg-slate-900 text-white hover:bg-slate-800 h-12 px-6 shadow-lg shadow-slate-900/20"
+                        className="btn bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-slate-800 h-12 px-6 shadow-lg shadow-slate-900/20"
                       >
                         Join
                       </button>

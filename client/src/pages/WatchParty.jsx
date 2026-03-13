@@ -85,19 +85,19 @@ export default function WatchParty() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[var(--bg-secondary)]">
       <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
           
           {/* Main Player Area */}
           <div className="flex-1 space-y-6">
-            <header className="flex items-center justify-between bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <header className="flex items-center justify-between bg-[var(--bg-primary)] p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
               <div className="flex items-center gap-4">
-                <Link to="/" className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-500">
+                <Link to="/" className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-500 dark:text-slate-400 dark:text-slate-500">
                   <ArrowLeft size={20} />
                 </Link>
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900 leading-tight">Room: {roomId}</h2>
+                  <h2 className="text-lg font-bold text-[var(--text-primary)] leading-tight">Room: {roomId}</h2>
                   <div className={`text-[10px] font-bold uppercase tracking-wider ${connected ? 'text-emerald-500' : 'text-rose-500'}`}>
                     {connected ? '● Sync Active' : '● Disconnected'}
                   </div>
@@ -108,7 +108,7 @@ export default function WatchParty() {
                   <Users size={14} className="text-blue-500" />
                   <span className="text-xs font-bold">{participants.length}</span>
                 </div>
-                <button onClick={() => setShowInfo(!showInfo)} className="p-2 text-slate-400 hover:text-slate-600">
+                <button onClick={() => setShowInfo(!showInfo)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-slate-600">
                   <Info size={20} />
                 </button>
               </div>
@@ -118,10 +118,10 @@ export default function WatchParty() {
             <div className="bg-slate-950 rounded-2xl overflow-hidden shadow-2xl border border-slate-800 ring-1 ring-slate-900/5 aspect-video flex items-center justify-center relative group">
               {!videoState.url ? (
                 <div className="text-center space-y-4 animate-in fade-in zoom-in duration-500">
-                  <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-800">
+                  <div className="w-20 h-20 bg-[var(--text-primary)] rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-800">
                     <Video size={32} className="text-slate-700" />
                   </div>
-                  <p className="text-slate-400 font-medium">Waiting for host to load content...</p>
+                  <p className="text-slate-400 dark:text-slate-500 font-medium">Waiting for host to load content...</p>
                 </div>
               ) : (
                 <div data-vjs-player className="w-full h-full">
@@ -132,22 +132,22 @@ export default function WatchParty() {
 
             {/* Host Controls */}
             {isHost && (
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 uppercase tracking-tight">
+              <div className="bg-[var(--bg-primary)] p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+                <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2 uppercase tracking-tight">
                   <Monitor size={16} className="text-blue-500" /> Host Controls
                 </h3>
                 <form onSubmit={handleUrlSubmit} className="flex gap-3">
                   <div className="relative flex-1">
-                    <Link2 size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Link2 size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                     <input 
                       type="text" 
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-11 pr-4 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none"
+                      className="w-full bg-[var(--bg-secondary)] border border-slate-200 dark:border-slate-700 rounded-xl py-3 pl-11 pr-4 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none"
                       placeholder="Enter direct mp4/m4v URL..."
                       value={urlInput}
                       onChange={(e) => setUrlInput(e.target.value)}
                     />
                   </div>
-                  <button type="submit" className="bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl text-sm font-bold transition-all shadow-lg active:scale-95">
+                  <button type="submit" className="bg-[var(--text-primary)] hover:opacity-90 text-[var(--bg-primary)] px-6 py-3 rounded-xl text-sm font-bold transition-all shadow-lg active:scale-95">
                     Stream Now
                   </button>
                 </form>
@@ -156,24 +156,24 @@ export default function WatchParty() {
           </div>
 
           {/* Side Chat */}
-          <div className="w-full lg:w-[400px] bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col h-[600px] lg:h-auto overflow-hidden">
-            <div className="p-5 border-bottom border-slate-100 flex items-center justify-between">
-              <h3 className="font-bold text-slate-900">Live Chat</h3>
+          <div className="w-full lg:w-[400px] bg-[var(--bg-primary)] rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col h-[600px] lg:h-auto overflow-hidden">
+            <div className="p-5 border-bottom border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <h3 className="font-bold text-[var(--text-primary)]">Live Chat</h3>
               <div className="h-2 w-2 bg-emerald-500 rounded-full animate-pulse" />
             </div>
 
-            <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-slate-50/50">
+            <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-[var(--bg-secondary)]/50">
               {messages.map((msg, i) => (
                 <div key={i} className={`flex flex-col ${msg.type === 'system' ? 'items-center' : (msg.username === user.username ? 'items-end' : 'items-start')}`}>
                   {msg.type === 'system' ? (
-                    <span className="text-[10px] font-bold text-slate-400 bg-slate-200/50 px-2 py-1 rounded-md uppercase tracking-wider">{msg.message}</span>
+                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 bg-slate-200/50 px-2 py-1 rounded-md uppercase tracking-wider">{msg.message}</span>
                   ) : (
                     <>
-                      <span className="text-[10px] font-bold text-slate-400 mb-1 px-1">{msg.username}</span>
+                      <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mb-1 px-1">{msg.username}</span>
                       <div className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-sm shadow-sm ${
                         msg.username === user.username 
                           ? 'bg-blue-600 text-white rounded-tr-none' 
-                          : 'bg-white text-slate-800 rounded-tl-none border border-slate-100'
+                          : 'bg-[var(--bg-primary)] text-slate-800 dark:text-slate-200 rounded-tl-none border border-slate-100 dark:border-slate-800'
                       }`}>
                         {msg.message}
                       </div>
@@ -183,10 +183,10 @@ export default function WatchParty() {
               ))}
             </div>
 
-            <form onSubmit={handleChatSubmit} className="p-4 bg-white border-t border-slate-100 flex gap-2">
+            <form onSubmit={handleChatSubmit} className="p-4 bg-[var(--bg-primary)] border-t border-slate-100 dark:border-slate-800 flex gap-2">
               <input 
                 type="text" 
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                className="flex-1 bg-[var(--bg-secondary)] border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                 placeholder="Say something..."
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}

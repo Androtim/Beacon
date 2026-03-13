@@ -88,8 +88,8 @@ export default function Messages() {
   return (
     <div className="container" style={{ maxWidth: '1200px', height: '100vh', padding: 0, display: 'flex' }}>
       {/* Sidebar */}
-      <div style={{ width: '350px', borderRight: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', backgroundColor: 'white' }}>
-        <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)' }}>
+      <div style={{ width: '350px', borderRight: '1px solid var(--bg-secondary)', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-primary)' }}>
+        <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--bg-secondary)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
             <Link to="/" style={{ color: '#64748b' }}><ArrowLeft size={20} /></Link>
             <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Network</h2>
@@ -99,7 +99,7 @@ export default function Messages() {
             <input 
               type="text" 
               className="input-field" 
-              style={{ paddingLeft: '2.5rem', marginBottom: 0, borderRadius: '24px', backgroundColor: '#f8fafc' }}
+              style={{ paddingLeft: '2.5rem', marginBottom: 0, borderRadius: '24px', backgroundColor: 'var(--bg-secondary)' }}
               placeholder="Search operatives..."
               value={searchQuery}
               onChange={handleSearch}
@@ -113,7 +113,7 @@ export default function Messages() {
               <div 
                 key={u.id} 
                 onClick={() => { setSelectedUser(u); setSearchResults([]); setSearchQuery('') }}
-                style={{ padding: '1rem 1.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem', borderBottom: '1px solid #f1f5f9' }}
+                style={{ padding: '1rem 1.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem', borderBottom: '1px solid var(--bg-secondary)' }}
               >
                 <div style={{ width: '40px', height: '40px', backgroundColor: '#e2e8f0', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <User size={20} style={{ color: '#64748b' }} />
@@ -132,8 +132,8 @@ export default function Messages() {
                   display: 'flex', 
                   alignItems: 'center', 
                   gap: '1rem', 
-                  backgroundColor: selectedUser?.id === conv.user.id ? '#eff6ff' : 'transparent',
-                  borderBottom: '1px solid #f1f5f9'
+                  backgroundColor: selectedUser?.id === conv.user.id ? 'var(--bg-secondary)' : 'transparent',
+                  borderBottom: '1px solid var(--bg-secondary)'
                 }}
               >
                 <div style={{ width: '48px', height: '48px', backgroundColor: '#dbeafe', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -155,10 +155,10 @@ export default function Messages() {
       </div>
 
       {/* Chat Area */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: '#f8fafc' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-secondary)' }}>
         {selectedUser ? (
           <>
-            <header style={{ padding: '1rem 2rem', backgroundColor: 'white', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <header style={{ padding: '1rem 2rem', backgroundColor: 'var(--bg-primary)', borderBottom: '1px solid var(--bg-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                 <div style={{ width: '40px', height: '40px', backgroundColor: '#dbeafe', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <User size={20} style={{ color: '#2563eb' }} />
@@ -179,8 +179,8 @@ export default function Messages() {
                     <div style={{ 
                       padding: '0.75rem 1.25rem', 
                       borderRadius: '20px', 
-                      backgroundColor: isMe ? '#2563eb' : 'white',
-                      color: isMe ? 'white' : '#1e293b',
+                      backgroundColor: isMe ? '#2563eb' : 'var(--bg-secondary)',
+                      color: isMe ? '#ffffff' : 'var(--text-primary)',
                       boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
                       fontSize: '0.9375rem'
                     }}>
@@ -195,11 +195,11 @@ export default function Messages() {
               <div ref={messagesEndRef} />
             </main>
 
-            <form onSubmit={sendMessage} style={{ padding: '1.5rem 2rem', backgroundColor: 'white', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '1rem' }}>
+            <form onSubmit={sendMessage} style={{ padding: '1.5rem 2rem', backgroundColor: 'var(--bg-primary)', borderTop: '1px solid var(--bg-secondary)', display: 'flex', gap: '1rem' }}>
               <input 
                 type="text" 
                 className="input-field" 
-                style={{ marginBottom: 0, borderRadius: '24px', backgroundColor: '#f1f5f9' }}
+                style={{ marginBottom: 0, borderRadius: '24px', backgroundColor: 'var(--bg-secondary)' }}
                 placeholder="Message operative..."
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}

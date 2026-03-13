@@ -13,7 +13,13 @@ export function useTheme() {
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => {
     // Check local storage or default to light
-    return localStorage.getItem('theme') || 'light'
+    const saved = localStorage.getItem('theme') || 'light';
+    if (saved === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    return saved;
   })
 
   useEffect(() => {
