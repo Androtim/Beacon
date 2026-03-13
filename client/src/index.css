@@ -2,42 +2,56 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: 210 40% 98%;
-  --foreground: 222 47% 11%;
-  --card: 0 0% 100%;
-  --primary: 221 83% 53%;
-  --secondary: 210 40% 96%;
-  --border: 214 32% 91%;
-}
-
 @layer base {
+  :root {
+    --bg-primary: #f8fafc;
+    --bg-secondary: #e2e8f0;
+    --text-primary: #0f172a;
+    --glass-bg: rgba(255, 255, 255, 0.8);
+  }
+
+  .dark {
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --text-primary: #f8fafc;
+    --glass-bg: rgba(30, 41, 59, 0.8);
+  }
+
   body {
-    background-color: #f9fafb;
-    color: #111827;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    -webkit-font-smoothing: antialiased;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    @apply antialiased font-sans transition-colors duration-200;
+    background-image: radial-gradient(circle at top right, var(--bg-secondary) 0%, transparent 40%),
+                      radial-gradient(circle at bottom left, var(--bg-secondary) 0%, transparent 40%);
+    background-attachment: fixed;
   }
 }
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center rounded-lg text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:pointer-events-none disabled:opacity-50 px-5 py-2.5 active:scale-[0.98];
+    @apply inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98];
   }
   
   .btn-primary {
-    @apply bg-blue-600 text-white shadow-sm hover:bg-blue-700 hover:shadow-md;
+    @apply bg-blue-600 text-white shadow-lg shadow-blue-500/20 hover:bg-blue-700 hover:shadow-blue-500/30 border border-transparent;
   }
   
   .btn-secondary {
-    @apply bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 shadow-sm;
+    @apply bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 shadow-sm dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700;
   }
 
-  .card {
-    @apply rounded-xl border border-slate-200 bg-white shadow-sm p-6;
+  .btn-ghost {
+    @apply text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100;
   }
 
-  .input {
-    @apply flex h-11 w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm transition-all placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500;
+  .input-field {
+    background-color: var(--glass-bg);
+    color: var(--text-primary);
+    @apply flex h-11 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2 text-sm transition-all placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 hover:border-slate-300 dark:hover:border-slate-600 backdrop-blur-sm;
+  }
+
+  .glass-card {
+    background-color: var(--glass-bg);
+    @apply backdrop-blur-xl border border-white/50 dark:border-slate-700/50 shadow-xl shadow-slate-200/50 dark:shadow-none rounded-2xl;
   }
 }

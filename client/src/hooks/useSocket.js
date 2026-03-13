@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { SignalingClient } from '../lib/SignalingClient'
 import { useAuth } from '../context/AuthContext'
 
-export function useSocket(serverUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`) {
+export function useSocket(serverUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.hostname}:8080/ws`) {
   const socketRef = useRef()
   const [connected, setConnected] = useState(false)
   const { user } = useAuth()

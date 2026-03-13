@@ -4,7 +4,10 @@ import axios from 'axios'
 const AuthContext = createContext()
 
 // Set axios defaults
-axios.defaults.baseURL = window.location.origin
+const isProd = import.meta.env.PROD
+axios.defaults.baseURL = isProd 
+  ? `${window.location.protocol}//${window.location.hostname}:3001`
+  : window.location.origin
 axios.defaults.withCredentials = true
 
 export function useAuth() {

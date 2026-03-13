@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { motion } from 'framer-motion'
+import { Radio, Lock, Mail, ArrowRight } from 'lucide-react'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -23,66 +24,88 @@ export default function Login() {
   }
 
   return (
-    <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+    <div className="min-h-screen flex items-center justify-center p-4">
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="card"
-        style={{ width: '100%', maxWidth: '400px' }}
+        className="glass-card w-full max-w-md p-8 relative overflow-hidden"
       >
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <h2 style={{ fontSize: '1.875rem', fontWeight: 'bold' }}>Sign In</h2>
-          <p style={{ color: '#6b7280' }}>Continue to Beacon</p>
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-emerald-500" />
+        
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center mb-4 border border-blue-100 shadow-sm">
+            <Radio size={24} />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900">Welcome Back</h2>
+          <p className="text-slate-500 mt-1">Sign in to continue to Beacon</p>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <form onSubmit={handleSubmit} className="space-y-5">
           {error && (
-            <div style={{ backgroundColor: '#fee2e2', border: '1px solid #fecaca', color: '#991b1b', padding: '0.75rem', borderRadius: '0.5rem', fontSize: '0.875rem' }}>
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-2"
+            >
+              <div className="w-1.5 h-1.5 rounded-full bg-rose-500" />
               {error}
-            </div>
+            </motion.div>
           )}
 
-          <div>
-            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#374151', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Email</label>
-            <input
-              type="email"
-              required
-              className="input-field"
-              placeholder="name@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              style={{ marginBottom: 0 }}
-            />
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide ml-1">Email</label>
+            <div className="relative">
+              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input
+                type="email"
+                required
+                className="input-field pl-10"
+                placeholder="name@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
           </div>
 
-          <div>
-            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', color: '#374151', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Password</label>
-            <input
-              type="password"
-              required
-              className="input-field"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              style={{ marginBottom: 0 }}
-            />
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide ml-1">Password</label>
+            <div className="relative">
+              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input
+                type="password"
+                required
+                className="input-field pl-10"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="btn btn-primary"
-            style={{ padding: '0.75rem', marginTop: '0.5rem' }}
+            className="btn btn-primary w-full h-12 mt-2 text-base group"
           >
-            {loading ? 'Processing...' : 'Sign In'}
+            {loading ? (
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <>
+                Sign In
+                <ArrowRight size={18} className="ml-2 group-hover:translate-x-1 transition-transform" />
+              </>
+            )}
           </button>
-
-          <div style={{ textAlign: 'center', marginTop: '1rem' }}>
-            <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-              New here? <Link to="/signup" style={{ color: '#2563eb', fontWeight: 'bold', textDecoration: 'none' }}>Create account</Link>
-            </p>
-          </div>
         </form>
+
+        <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+          <p className="text-sm text-slate-500">
+            Don't have an account?{' '}
+            <Link to="/signup" className="text-blue-600 font-bold hover:text-blue-700 transition-colors">
+              Create Account
+            </Link>
+          </p>
+        </div>
       </motion.div>
     </div>
   )

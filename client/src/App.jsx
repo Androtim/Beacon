@@ -8,6 +8,7 @@ import Home from './pages/Home'
 import WatchParty from './pages/WatchParty'
 import Settings from './pages/Settings'
 import Messages from './pages/Messages'
+import Layout from './components/Layout'
 import { Loader, Zap, AlertTriangle, RefreshCw } from 'lucide-react'
 import { motion } from 'framer-motion'
 
@@ -75,32 +76,32 @@ function App() {
       <ThemeProvider>
         <AuthProvider>
           <Router>
-            <div className="min-h-screen">
+            <Layout>
               <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<Signup />} />
-              <Route path="/" element={
-                <ProtectedRoute>
-                  <Home />
-                </ProtectedRoute>
-              } />
-              <Route path="/party/:id" element={
-                <ProtectedRoute>
-                  <WatchParty />
-                </ProtectedRoute>
-              } />
-              <Route path="/settings" element={
-                <ProtectedRoute>
-                  <Settings />
-                </ProtectedRoute>
-              } />
-              <Route path="/messages" element={
-                <ProtectedRoute>
-                  <Messages />
-                </ProtectedRoute>
-              } />
-            </Routes>
-          </div>
+                <Route path="/login" element={<Login />} />
+                <Route path="/signup" element={<Signup />} />
+                <Route path="/" element={
+                  <ProtectedRoute>
+                    <Home />
+                  </ProtectedRoute>
+                } />
+                <Route path="/party/:id" element={
+                  <ProtectedRoute>
+                    <WatchParty />
+                  </ProtectedRoute>
+                } />
+                <Route path="/settings" element={
+                  <ProtectedRoute>
+                    <Settings />
+                  </ProtectedRoute>
+                } />
+                <Route path="/messages" element={
+                  <ProtectedRoute>
+                    <Messages />
+                  </ProtectedRoute>
+                } />
+              </Routes>
+            </Layout>
         </Router>
       </AuthProvider>
     </ThemeProvider>
