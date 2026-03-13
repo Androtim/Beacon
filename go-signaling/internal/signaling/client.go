@@ -95,7 +95,7 @@ var upgrader = websocket.Upgrader{
 		}
 
 		// Allow production domain
-		if u.Hostname() == "beacon.com" || strings.HasSuffix(u.Hostname(), ".beacon.com") {
+		if u.Hostname() == "beacon.com" || strings.HasSuffix(u.Hostname(), ".beacon.com") || u.Hostname() == "116.203.236.187" {
 			return true
 		}
 
