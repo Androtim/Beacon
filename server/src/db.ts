@@ -75,6 +75,10 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX idx_rooms_last_active ON rooms (last_active);
   `,
+  // v3: E2E DM encryption — users publish an ECDH public key (JWK)
+  `
+  ALTER TABLE users ADD COLUMN public_key TEXT;
+  `,
 ]
 
 const migrate = db.transaction(() => {
@@ -97,6 +101,7 @@ export interface UserRow {
   is_online: number
   last_seen: number
   created_at: number
+  public_key: string | null
 }
 
 interface MessageRow {
@@ -117,6 +122,7 @@ export function toPublicUser(row: UserRow): PublicUser {
     isOnline: !!row.is_online,
     lastSeen: row.last_seen,
     createdAt: row.created_at,
+    publicKey: row.public_key ?? undefined,
   }
 }
 
@@ -129,6 +135,7 @@ const selectUserByEmail = db.prepare(`SELECT * FROM users WHERE email = ?`)
 const selectUserByUsername = db.prepare(`SELECT * FROM users WHERE username = ?`)
 const updateOnline = db.prepare(`UPDATE users SET is_online = ?, last_seen = ? WHERE id = ?`)
 const updateUsernameStmt = db.prepare(`UPDATE users SET username = ? WHERE id = ?`)
+const updatePublicKeyStmt = db.prepare(`UPDATE users SET public_key = ? WHERE id = ?`)
 const upgradeGuestStmt = db.prepare(
   `UPDATE users SET username = ?, email = ?, password_hash = ?, is_guest = 0 WHERE id = ?`
 )
@@ -168,6 +175,10 @@ export function upgradeGuestToAccount(id: string, username: string, email: strin
 export function updateUsername(id: string, username: string): UserRow {
   updateUsernameStmt.run(username.trim(), id)
   return findUserById(id)!
+}
+
+export function setPublicKey(id: string, publicKeyJwk: string): void {
+  updatePublicKeyStmt.run(publicKeyJwk, id)
 }
 
 export function findUserById(id: string): UserRow | undefined {
@@ -328,7 +339,7 @@ export function getConversations(meId: string): ConversationSummary[] {
     if (!other) return []
     const unread = (countUnreadFrom.get(otherId, meId) as { n: number }).n
     return [{
-      user: { id: other.id, username: other.username },
+      user: { id: other.id, username: other.username, publicKey: other.public_key ?? undefined },
       lastMessage: { message: r.message, timestamp: r.timestamp },
       unreadCount: unread,
     }]

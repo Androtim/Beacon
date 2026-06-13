@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import {
   createUser, createGuest, upgradeGuestToAccount, updateUsername,
-  findUserByEmail, findUserByUsername,
+  findUserByEmail, findUserByUsername, setPublicKey,
   verifyPassword, setUserOnline, toPublicUser,
 } from './db.js'
 import { authenticateToken, optionalToken, signToken } from './middleware.js'
@@ -86,6 +86,22 @@ router.post('/rename', authenticateToken, (req, res) => {
   const user = updateUsername(req.user!.id, username)
   const token = signToken({ userId: user.id, username: user.username })
   res.json({ message: 'Username updated', token, user: toPublicUser(user) })
+})
+
+/** Publish this account's ECDH public key (JWK) for E2E DMs. */
+router.post('/public-key', authenticateToken, (req, res) => {
+  const { publicKey } = req.body ?? {}
+  if (typeof publicKey !== 'string' || publicKey.length > 2048) {
+    return res.status(400).json({ message: 'publicKey (JWK JSON string) required' })
+  }
+  try {
+    const jwk = JSON.parse(publicKey)
+    if (jwk.kty !== 'EC' || jwk.crv !== 'P-256' || !jwk.x || !jwk.y) throw new Error('bad jwk')
+  } catch {
+    return res.status(400).json({ message: 'publicKey must be an EC P-256 JWK' })
+  }
+  setPublicKey(req.user!.id, publicKey)
+  res.json({ message: 'Public key updated' })
 })
 
 router.get('/me', authenticateToken, (req, res) => {

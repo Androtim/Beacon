@@ -25,6 +25,20 @@ questions. Nothing here blocks the work; answer whenever.
 
 4. **Chat timestamps are server-assigned** (clients can't fake message times).
 
+## Overnight build notes (Phase 4)
+
+- **DMs are now E2E encrypted** (ECDH P-256 + AES-GCM via WebCrypto). The
+  server stores only `{v:1, iv, ct}` envelopes — verified by a test that reads
+  the raw API as the server sees it. Two follow-ups deliberately deferred:
+  - Keys are **per-device** (IndexedDB, non-extractable). A new device can't
+    read old messages — the passphrase key-backup you approved is the fix,
+    needs UI, planned with Phase 5.
+  - The **device-only/opt-in-mailbox toggle** you chose: right now offline
+    messages always park on the server as ciphertext (= mailbox always on).
+    Making device-only the default needs local-first history storage; also
+    planned with Phase 5. Privacy-wise the server can't read anything either way.
+- Old plaintext DMs from before tonight still display fine (legacy fallback).
+
 ## Open questions (answer when you're back)
 
 - **TURN server**: the code reads TURN_SERVER_URL/USERNAME/PASSWORD from
