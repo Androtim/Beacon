@@ -1,18 +1,9 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { nodePolyfills } from 'vite-plugin-node-polyfills'
 
 export default defineConfig({
   plugins: [
-    react(),
-    nodePolyfills({
-      globals: {
-        Buffer: true,
-        global: true,
-        process: true,
-      },
-      protocolImports: true,
-    })
+    react()
   ],
   server: {
     port: 3000,
@@ -26,9 +17,10 @@ export default defineConfig({
         target: 'http://localhost:3001',
         changeOrigin: true
       },
-      '/ws': {
-        target: 'http://localhost:8080',
-        ws: true
+      '/socket.io': {
+        target: 'http://localhost:3001',
+        ws: true,
+        changeOrigin: true
       }
     }
   },

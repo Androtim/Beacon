@@ -1,43 +1,62 @@
 import { useEffect, useRef, useState } from 'react'
-import { SignalingClient } from '../lib/SignalingClient'
+import { io } from 'socket.io-client'
 import { useAuth } from '../context/AuthContext'
 
-export function useSocket(serverUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.hostname}:8080/ws`) {
+export function useSocket() {
   const socketRef = useRef()
   const [connected, setConnected] = useState(false)
   const { user } = useAuth()
+  const userId = user?.id || user?._id || user?.username
 
   useEffect(() => {
-    console.log('🔌 Initializing socket connection to:', serverUrl)
-    const token = localStorage.getItem('token') || 'demo-token'
+    const token = localStorage.getItem('token')
     
-    socketRef.current = new SignalingClient(serverUrl)
+    // Only connect if the user is authenticated
+    if (!token || !userId) {
+      if (socketRef.current) {
+        socketRef.current.disconnect()
+        socketRef.current = null
+        setConnected(false)
+      }
+      return
+    }
+
+    console.log('🔌 Connecting to Socket.IO backend')
     
+    // Connect directly to backend port 3001 in dev to bypass Vite proxy websocket issues
+    const socketUrl = import.meta.env.DEV ? 'http://localhost:3001' : undefined
+    socketRef.current = io(socketUrl, {
+      auth: { token },
+      transports: ['websocket', 'polling'],
+      autoConnect: false
+    })
+
     socketRef.current.on('connect', () => {
-      console.log('✅ Socket connected')
+      console.log('✅ Socket.IO connected')
       setConnected(true)
     })
 
     socketRef.current.on('disconnect', () => {
-      console.log('❌ Socket disconnected')
+      console.log('❌ Socket.IO disconnected')
       setConnected(false)
     })
 
-    socketRef.current.on('error', (error) => {
-      console.error('❌ Socket error:', error)
+    socketRef.current.on('connect_error', (error) => {
+      console.error('❌ Socket.IO connection error:', error)
       setConnected(false)
     })
 
-    socketRef.current.connect(token)
+    socketRef.current.connect()
 
     return () => {
       if (socketRef.current) {
         socketRef.current.disconnect()
+        socketRef.current = null
       }
     }
-  }, [serverUrl, user])
+  }, [userId])
 
-  // Backward compatibility properties
+  // Backward compatibility properties for components reading connection state
   if (socketRef.current) {
     socketRef.current.connected = connected
     socketRef.current.connectionStatus = connected
