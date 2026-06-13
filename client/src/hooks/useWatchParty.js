@@ -10,6 +10,8 @@ export function useWatchParty(roomId, user) {
   // Authoritative playback state from the server (see shared/sync.ts).
   const [playback, setPlayback] = useState({ url: null, isPlaying: false, position: 0, atServerTime: 0 })
   const [fileShare, setFileShare] = useState(null)
+  const [streamRequests, setStreamRequests] = useState([]) // host: pending suggestions
+  const [myRequest, setMyRequest] = useState(null) // requester: { status: 'pending'|'approved'|'denied', url }
 
   // Clock offset to the server, recalibrated on every (re)connect.
   // serverNow() is null until the first calibration completes.
@@ -83,6 +85,14 @@ export function useWatchParty(roomId, user) {
           timestamp: data.timestamp,
         }])
       },
+      'stream-request': (data) => {
+        // Host received a suggestion to approve.
+        setStreamRequests((prev) => [...prev.filter((r) => r.requestId !== data.requestId), data])
+      },
+      'stream-request-resolved': (data) => {
+        // Requester learns the outcome.
+        setMyRequest((prev) => (prev ? { ...prev, status: data.approved ? 'approved' : 'denied' } : prev))
+      },
     }
 
     for (const [event, handler] of Object.entries(handlers)) socket.on(event, handler)
@@ -118,6 +128,21 @@ export function useWatchParty(roomId, user) {
     socket.emit('chat-message', { roomId, message })
   }, [socket, roomId, user])
 
+  // Suggest a video. Host suggestions auto-apply server-side; others wait for approval.
+  const requestStream = useCallback((url) => {
+    if (!socket || !roomId) return
+    socket.emit('stream-request', { roomId, url })
+    if (!isHost) setMyRequest({ status: 'pending', url })
+  }, [socket, roomId, isHost])
+
+  const respondStream = useCallback((requestId, approve) => {
+    if (!socket || !roomId) return
+    socket.emit('stream-respond', { roomId, requestId, approve })
+    setStreamRequests((prev) => prev.filter((r) => r.requestId !== requestId))
+  }, [socket, roomId])
+
+  const clearMyRequest = useCallback(() => setMyRequest(null), [])
+
   return {
     participants,
     isHost,
@@ -125,11 +150,16 @@ export function useWatchParty(roomId, user) {
     playback,
     serverNow,
     fileShare,
+    streamRequests,
+    myRequest,
     setVideoUrl,
     playVideo,
     pauseVideo,
     seekVideo,
     sendMessage,
+    requestStream,
+    respondStream,
+    clearMyRequest,
     connected,
     socket,
   }

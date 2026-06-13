@@ -1,5 +1,6 @@
 import { Server, type Socket } from 'socket.io'
 import type { Server as HttpServer } from 'http'
+import { randomUUID } from 'crypto'
 import type { z } from 'zod'
 import type { ServerToClientEvents, RoomFileShare, FileInfo } from '../../shared/protocol.js'
 import { findUserById, createMessage, getRoom } from './db.js'
@@ -28,6 +29,7 @@ const fileShares = new Map<string, FileShareSession>()
 const roomFileShares = new Map<string, RoomFileShare>()
 const onlineUsers = new Map<string, { socketId: string; username: string }>()
 const voiceRooms = new Map<string, Map<string, string>>() // roomId -> socketId -> username
+const streamRequests = new Map<string, { roomId: string; url: string; fromUserId: string }>() // requestId -> request
 
 const FILE_SHARE_TTL_MS = 30 * 60 * 1000
 
@@ -132,6 +134,34 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
     on('video-seek', ({ roomId, currentTime }) => {
       if (!rooms.liveParticipant(roomId, userId)) return
       applyAndBroadcast(roomId, { position: currentTime })
+    })
+
+    // ---- Request to stream (owner authorization) ----
+    // Any participant can suggest a video URL. If they're the host it just
+    // plays; otherwise the host gets an approval prompt.
+    on('stream-request', ({ roomId, url }) => {
+      if (!rooms.liveParticipant(roomId, userId)) return
+      if (rooms.isHost(roomId, userId)) {
+        applyAndBroadcast(roomId, { url, isPlaying: false, position: 0 })
+        return
+      }
+      const room = getRoom(roomId)
+      if (!room) return
+      const hostLive = rooms.liveParticipant(roomId, room.host_id)
+      if (!hostLive) return // no host online to approve
+      const requestId = randomUUID()
+      streamRequests.set(requestId, { roomId, url, fromUserId: userId })
+      io.to(hostLive.socketId).emit('stream-request', { requestId, from: { id: userId, username }, url })
+    })
+
+    on('stream-respond', ({ roomId, requestId, approve }) => {
+      if (!rooms.isHost(roomId, userId)) return
+      const req = streamRequests.get(requestId)
+      if (!req || req.roomId !== roomId) return
+      streamRequests.delete(requestId)
+      if (approve) applyAndBroadcast(roomId, { url: req.url, isPlaying: false, position: 0 })
+      const requester = rooms.liveParticipant(roomId, req.fromUserId)
+      if (requester) io.to(requester.socketId).emit('stream-request-resolved', { requestId, approved: approve, url: req.url })
     })
 
     // ---- Chat ----

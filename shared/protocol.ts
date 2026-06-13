@@ -86,6 +86,10 @@ export interface ClientToServerEvents {
   'video-pause': (data: { roomId: string; currentTime: number; timestamp: number }) => void
   'video-seek': (data: { roomId: string; currentTime: number; timestamp: number }) => void
 
+  // Any participant can suggest a video; the host approves before it goes live.
+  'stream-request': (data: { roomId: string; url: string }) => void
+  'stream-respond': (data: { roomId: string; requestId: string; approve: boolean }) => void
+
   // Identity is taken from the authenticated socket; the payload carries only the text.
   'chat-message': (data: { roomId: string; message: string; timestamp?: number }) => void
   'private-message': (data: { to: string; message: string; timestamp: number }) => void
@@ -119,6 +123,10 @@ export interface ServerToClientEvents {
   }) => void
   // Single authoritative playback broadcast — replaces per-action video events.
   'video-state': (data: { playback: PlaybackState }) => void
+  // Sent to the host when a participant suggests a video.
+  'stream-request': (data: { requestId: string; from: { id: string; username: string }; url: string }) => void
+  // Sent to the requester when the host approves/denies their suggestion.
+  'stream-request-resolved': (data: { requestId: string; approved: boolean; url: string }) => void
   'user-joined': (data: { participants: Participant[]; user: { id: string; username: string } }) => void
   'user-left': (data: { participants: Participant[]; user: { id: string; username: string } }) => void
   // Presence refresh without a join/leave announcement (e.g. someone reconnected).
