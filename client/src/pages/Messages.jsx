@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../hooks/useSocket'
-import { Send, Search, User, ArrowLeft, MessageSquare, ShieldAlert, Paperclip, Download, FileIcon, Check } from 'lucide-react'
+import { Send, Search, User, ArrowLeft, MessageSquare, ShieldAlert, Paperclip, Download, FileIcon, Check, Tv } from 'lucide-react'
 import axios from 'axios'
 import { getOrCreateKeyPair, encryptMessage, decryptMessage, isEnvelope } from '../lib/dmCrypto'
 import { useDmFiles } from '../hooks/useDmFiles'
@@ -13,6 +13,23 @@ export default function Messages() {
   const socket = useSocket()
   const { transfers, sendFile, acceptFile, declineFile } = useDmFiles({ socket, me: user })
   const attachRef = useRef(null)
+  const navigate = useNavigate()
+  const [partyInvites, setPartyInvites] = useState([]) // {from, fromUsername, roomId}
+
+  // Watch-party invites arriving in a DM.
+  useEffect(() => {
+    if (!socket) return
+    const onInvite = ({ from, fromUsername, roomId }) =>
+      setPartyInvites((p) => [...p.filter((x) => x.roomId !== roomId), { from, fromUsername, roomId }])
+    socket.on('dm-party-invite', onInvite)
+    return () => socket.off('dm-party-invite', onInvite)
+  }, [socket])
+
+  const startPartyWith = (peer) => {
+    const roomId = Math.random().toString(36).substring(2, 8).toUpperCase()
+    socket.emit('dm-party-invite', { to: peer.id, roomId })
+    navigate(`/party/${roomId}`)
+  }
   const [conversations, setConversations] = useState([])
   const [selectedUser, setSelectedUser] = useState(null)
   const selectedUserRef = useRef(null)
@@ -137,11 +154,13 @@ export default function Messages() {
   // Conversation list = real conversations + anyone who's sent us a file but
   // isn't in our message history yet (so an incoming file is reachable).
   const mergedConvos = [...conversations]
-  for (const t of transfers) {
-    if (t.peerUsername && !mergedConvos.some((c) => c.user.id === t.peerId)) {
-      mergedConvos.push({ user: { id: t.peerId, username: t.peerUsername }, lastMessage: { message: 'Sent a file', timestamp: Date.now() }, unreadCount: 0 })
+  const addPeer = (id, username, label) => {
+    if (id && username && !mergedConvos.some((c) => c.user.id === id)) {
+      mergedConvos.push({ user: { id, username }, lastMessage: { message: label, timestamp: Date.now() }, unreadCount: 0 })
     }
   }
+  for (const t of transfers) addPeer(t.peerId, t.peerUsername, 'Sent a file')
+  for (const inv of partyInvites) addPeer(inv.from, inv.fromUsername, 'Invited you to watch')
 
   if (isGuest) {
     return (
@@ -311,6 +330,21 @@ export default function Messages() {
                   </div>
                 )
               })}
+              {/* Watch-party invites in this conversation */}
+              {partyInvites.filter((inv) => inv.from === selectedUser.id).map((inv) => (
+                <div key={inv.roomId} className="self-start max-w-[80%]" data-testid="dm-party-invite">
+                  <div className="px-4 py-3.5 w-64" style={{ background: 'var(--surface-raised)', color: 'var(--text-primary)', borderRadius: 'var(--radius)' }}>
+                    <div className="flex items-center gap-2.5 mb-2.5">
+                      <div className="w-9 h-9 rounded-xl grid place-items-center" style={{ background: 'rgb(var(--accent) / 0.15)', color: 'rgb(var(--accent))' }}><Tv size={16} /></div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold">{inv.fromUsername} started a watch party</p>
+                        <p className="text-[10px] font-mono" style={{ color: 'var(--text-secondary)' }}>Room {inv.roomId}</p>
+                      </div>
+                    </div>
+                    <button onClick={() => navigate(`/party/${inv.roomId}`)} className="btn btn-primary w-full h-9 text-[11px]" data-testid="dm-party-join">Join</button>
+                  </div>
+                </div>
+              ))}
               <div ref={messagesEndRef} />
             </main>
 
@@ -318,6 +352,7 @@ export default function Messages() {
               <input ref={attachRef} type="file" className="hidden" data-testid="dm-attach-input"
                 onChange={(e) => { const f = e.target.files[0]; if (f) sendFile(selectedUser.id, f); e.target.value = null }} />
               <button type="button" onClick={() => attachRef.current?.click()} className="btn btn-secondary w-11 h-11 !p-0 shrink-0" title="Send a file" data-testid="dm-attach"><Paperclip size={16} /></button>
+              <button type="button" onClick={() => startPartyWith(selectedUser)} className="btn btn-secondary w-11 h-11 !p-0 shrink-0" title="Start a watch party" data-testid="dm-start-party"><Tv size={16} /></button>
               <input
                 type="text"
                 className="input-field flex-1 h-11"
