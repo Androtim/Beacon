@@ -4,17 +4,41 @@ import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../hooks/useSocket'
 import { Send, Search, User, ArrowLeft, MoreVertical, MessageSquare, ShieldAlert } from 'lucide-react'
 import axios from 'axios'
+import { getOrCreateKeyPair, encryptMessage, decryptMessage, isEnvelope } from '../lib/dmCrypto'
 
 export default function Messages() {
   const { user, isGuest } = useAuth()
   const socket = useSocket()
   const [conversations, setConversations] = useState([])
   const [selectedUser, setSelectedUser] = useState(null)
+  const selectedUserRef = useRef(null)
+  selectedUserRef.current = selectedUser
   const [messages, setMessages] = useState([])
   const [newMessage, setNewMessage] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const messagesEndRef = useRef(null)
+
+  // E2E: ensure this device has a keypair and the public half is published.
+  const keysRef = useRef(null)
+  useEffect(() => {
+    if (isGuest || !user?.id) return
+    getOrCreateKeyPair(user.id).then(async (keys) => {
+      keysRef.current = keys
+      const published = user.publicKey
+      const mine = JSON.stringify(keys.publicJwk)
+      if (published !== mine) {
+        await axios.post('/api/auth/public-key', { publicKey: mine }).catch(() => {})
+      }
+    })
+  }, [isGuest, user?.id])
+
+  const decryptFor = async (otherPublicKey, text) => {
+    if (!isEnvelope(text)) return text // legacy plaintext
+    if (!keysRef.current || !otherPublicKey) return '🔒 (encrypted)'
+    const plain = await decryptMessage(keysRef.current.privateKey, otherPublicKey, text)
+    return plain ?? '🔒 (sent to another device)'
+  }
 
   useEffect(() => {
     if (!isGuest) fetchConversations()
@@ -29,14 +53,15 @@ export default function Messages() {
   useEffect(() => {
     if (!socket) return
 
-    socket.on('private-message', ({ from, message, timestamp }) => {
+    const onPrivateMessage = async ({ from, message, timestamp }) => {
       if (selectedUser && from.id === selectedUser.id) {
-        setMessages(prev => [...prev, { from: { id: from.id }, message, timestamp }])
+        const text = await decryptFor(selectedUser.publicKey, message)
+        setMessages(prev => [...prev, { from: { id: from.id }, message: text, timestamp }])
       }
       fetchConversations()
-    })
-
-    return () => socket.off('private-message')
+    }
+    socket.on('private-message', onPrivateMessage)
+    return () => socket.off('private-message', onPrivateMessage)
   }, [socket, selectedUser])
 
   useEffect(() => {
@@ -55,7 +80,14 @@ export default function Messages() {
   const fetchMessages = async (userId) => {
     try {
       const res = await axios.get(`/api/messages/${userId}`)
-      setMessages(res.data.messages)
+      // The other party's public key decrypts in both directions (ECDH is
+      // symmetric between the two of us).
+      const otherKey = selectedUserRef.current?.publicKey
+      const decrypted = await Promise.all(res.data.messages.map(async (m) => ({
+        ...m,
+        message: await decryptFor(otherKey, m.message),
+      })))
+      setMessages(decrypted)
     } catch (err) {
       console.error('Failed to fetch messages')
     }
@@ -74,13 +106,26 @@ export default function Messages() {
     }
   }
 
-  const sendMessage = (e) => {
+  const sendMessage = async (e) => {
     e.preventDefault()
     if (!newMessage.trim() || !selectedUser || !socket) return
 
     const timestamp = Date.now()
-    socket.emit('private-message', { to: selectedUser.id, message: newMessage, timestamp })
-    setMessages(prev => [...prev, { from: { id: user.id }, message: newMessage, timestamp }])
+    const plaintext = newMessage
+    // Encrypt whenever the recipient has published a key; the server only
+    // ever sees the envelope. (Plaintext fallback for accounts that have
+    // never opened Messages and so never published one.)
+    let wire = plaintext
+    if (selectedUser.publicKey && keysRef.current) {
+      try {
+        wire = await encryptMessage(keysRef.current.privateKey, selectedUser.publicKey, plaintext)
+      } catch (err) {
+        console.error('Encryption failed, not sending:', err)
+        return
+      }
+    }
+    socket.emit('private-message', { to: selectedUser.id, message: wire, timestamp })
+    setMessages(prev => [...prev, { from: { id: user.id }, message: plaintext, timestamp }])
     setNewMessage('')
     fetchConversations()
   }

@@ -12,6 +12,8 @@ export interface PublicUser {
   isOnline?: boolean
   lastSeen?: number
   createdAt?: number
+  /** ECDH P-256 public key (JWK JSON) for E2E DMs. */
+  publicKey?: string
 }
 
 export interface Participant {
@@ -157,7 +159,7 @@ export interface AuthResponse {
 }
 
 export interface ConversationSummary {
-  user: { id: string; username: string }
+  user: { id: string; username: string; publicKey?: string }
   lastMessage: { message: string; timestamp: number }
   unreadCount: number
 }

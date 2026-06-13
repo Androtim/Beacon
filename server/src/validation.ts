@@ -39,7 +39,8 @@ export const schemas = {
   }),
   'private-message': z.object({
     to: z.string().min(1).max(64),
-    message: z.string().min(1).max(5000),
+    // Generous cap: E2E envelopes are base64 (~1.4x) plus JSON overhead.
+    message: z.string().min(1).max(20000),
     timestamp: z.number().optional(),
   }),
   'file-share-create': z.object({
