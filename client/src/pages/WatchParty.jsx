@@ -51,29 +51,37 @@ export default function WatchParty() {
     setTimeout(() => setCopied(false), 1500)
   }
 
+  // Cinema mode is pure CSS: the player stays mounted in the same place in the
+  // tree and is expanded to a fixed fullscreen overlay. (Re-rendering it
+  // elsewhere would unmount the <video> and kill the P2P stream.)
   const videoPane = (
     <div
-      className="relative w-full aspect-video grid place-items-center overflow-hidden bg-black"
-      style={{ borderRadius: cinema ? 0 : 'var(--radius)', boxShadow: cinema ? 'none' : '0 12px 50px -10px rgba(0,0,0,0.6)' }}
+      data-testid={cinema ? 'cinema-stage' : 'video-pane'}
+      className={cinema
+        ? 'fixed inset-0 z-50 grid place-items-center overflow-hidden bg-black'
+        : 'relative w-full aspect-video grid place-items-center overflow-hidden bg-black'}
+      style={cinema ? {} : { borderRadius: 'var(--radius)', boxShadow: '0 12px 50px -10px rgba(0,0,0,0.6)' }}
     >
-      {!activeVideoSrc ? (
-        <div className="text-center space-y-4 p-6">
-          <div className="beacon-mark w-16 h-16 rounded-2xl grid place-items-center mx-auto animate-beacon">
-            <Video size={28} className="text-white" />
+      <div className={cinema ? 'w-full h-full grid place-items-center' : 'contents'}>
+        {!activeVideoSrc ? (
+          <div className="text-center space-y-4 p-6">
+            <div className="beacon-mark w-16 h-16 rounded-2xl grid place-items-center mx-auto animate-beacon">
+              <Video size={28} className="text-white" />
+            </div>
+            <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+              {isHost ? 'Pick something to watch below to get started.' : 'Waiting for the host to start something…'}
+            </p>
           </div>
-          <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-            {isHost ? 'Pick something to watch below to get started.' : 'Waiting for the host to start something…'}
-          </p>
-        </div>
-      ) : (
-        <SyncedPlayer
-          src={activeVideoSrc}
-          playback={playback}
-          serverNow={serverNow}
-          isHost={isHost}
-          onIntent={{ play: playVideo, pause: pauseVideo, seek: seekVideo }}
-        />
-      )}
+        ) : (
+          <SyncedPlayer
+            src={activeVideoSrc}
+            playback={playback}
+            serverNow={serverNow}
+            isHost={isHost}
+            onIntent={{ play: playVideo, pause: pauseVideo, seek: seekVideo }}
+          />
+        )}
+      </div>
 
       {/* Cinema toggle floats over the video */}
       <button
@@ -87,22 +95,6 @@ export default function WatchParty() {
       </button>
     </div>
   )
-
-  // ---- Cinema mode: video fills the screen, everything else recedes ----
-  if (cinema) {
-    return (
-      <div className="fixed inset-0 z-50 flex flex-col" style={{ background: '#000' }} data-testid="cinema-stage">
-        <div className="flex-1 grid place-items-center">{videoPane}</div>
-        <Link
-          to="/"
-          className="absolute top-3 left-3 h-9 px-3 inline-flex items-center gap-2 rounded-xl backdrop-blur-md text-xs font-bold"
-          style={{ background: 'rgba(0,0,0,0.45)', color: '#fff' }}
-        >
-          <ArrowLeft size={15} /> Leave
-        </Link>
-      </div>
-    )
-  }
 
   return (
     <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">

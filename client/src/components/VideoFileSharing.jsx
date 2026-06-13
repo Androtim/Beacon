@@ -105,7 +105,7 @@ export default function VideoFileSharing({ socket, roomId, isHost, onVideoReady,
     <div className="bg-[#1e293b]/50 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-800 backdrop-blur-md rounded-2xl p-5 space-y-4 font-mono shadow-xl shadow-slate-100/50 dark:shadow-none">
       <h3 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.3em] flex items-center gap-2">
         <Upload className="h-4 w-4 text-blue-500" />
-        Protocol: P2P Watch Sync
+        Share a video
       </h3>
 
       {isHost && hostVideoSource === 'file' ? (
@@ -128,7 +128,7 @@ export default function VideoFileSharing({ socket, roomId, isHost, onVideoReady,
             onClick={() => fileInputRef.current?.click()}
             className="btn btn-secondary w-full h-11 text-[10px] tracking-[0.2em]"
           >
-            SELECT_PAYLOAD
+            Choose a video
           </button>
 
           {selectedFile && (
@@ -156,7 +156,7 @@ export default function VideoFileSharing({ socket, roomId, isHost, onVideoReady,
                   className="btn btn-primary w-full h-11 text-[10px] tracking-[0.2em]"
                   data-testid="party-broadcast"
                 >
-                  BROADCAST_PAYLOAD
+                  Share with the party
                 </button>
               )}
 
@@ -165,14 +165,14 @@ export default function VideoFileSharing({ socket, roomId, isHost, onVideoReady,
                   <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 text-center flex items-center justify-center gap-2">
                     <Radio size={12} className="text-blue-500 animate-pulse" />
                     <p className="text-blue-500 text-[10px] font-black uppercase tracking-wider">
-                      {status === 'streaming' ? 'STREAMING_TO_PEERS' : 'BROADCAST_LIVE // AWAITING_PEERS'}
+                      {status === 'streaming' ? 'Streaming to the party' : 'Ready — waiting for others'}
                     </p>
                   </div>
                   <button
                     onClick={cancelTransfer}
                     className="btn bg-rose-500 text-white hover:bg-rose-600 w-full h-9 text-[9px] tracking-[0.2em]"
                   >
-                    TERMINATE_LINK
+                    Stop sharing
                   </button>
                 </div>
               )}
@@ -183,7 +183,7 @@ export default function VideoFileSharing({ socket, roomId, isHost, onVideoReady,
         <div className="text-center py-6 px-4 bg-slate-50 dark:bg-slate-850/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 opacity-60">
           <Upload className="h-7 w-7 mx-auto mb-2.5 text-slate-400" />
           <p className="text-slate-500 dark:text-slate-400 text-[9px] font-black uppercase tracking-[0.2em] leading-relaxed">
-            SWITCH TO "P2P_FILE"<br/>MODE TO BROADCAST
+Switch to "File" mode<br/>to share a video
           </p>
         </div>
       ) : (
@@ -192,7 +192,7 @@ export default function VideoFileSharing({ socket, roomId, isHost, onVideoReady,
             <div className="text-center py-7 bg-slate-50 dark:bg-slate-850/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 opacity-60 animate-pulse">
               <Users className="h-7 w-7 mx-auto mb-2.5 text-slate-400" />
               <p className="text-slate-400 dark:text-slate-500 text-[9px] font-black uppercase tracking-[0.2em]">
-                Awaiting_Transmission...
+                Waiting for the host to share a video…
               </p>
             </div>
           )}
@@ -200,7 +200,7 @@ export default function VideoFileSharing({ socket, roomId, isHost, onVideoReady,
           {participantStatus === 'pending' && pendingFileInfo && (
             <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-5 text-center">
               <Download className="h-8 w-8 mx-auto mb-3 text-blue-500" />
-              <p className="text-slate-800 dark:text-slate-200 font-black text-[10px] uppercase tracking-[0.2em] mb-3">INCOMING_VIDEO_STREAM</p>
+              <p className="text-slate-800 dark:text-slate-200 font-black text-[10px] uppercase tracking-[0.2em] mb-3">The host wants to share a video</p>
               <div className="bg-slate-50 dark:bg-black/40 rounded-lg p-3 mb-4 border border-slate-200/50 dark:border-slate-850">
                 <p className="text-blue-500 font-bold text-[9px] truncate uppercase">{pendingFileInfo.name}</p>
                 <p className="text-slate-400 text-[8px] mt-0.5">{formatFileSize(pendingFileInfo.size)}</p>
@@ -215,7 +215,7 @@ export default function VideoFileSharing({ socket, roomId, isHost, onVideoReady,
           {participantStatus === 'connecting' && (
             <div className="text-center py-6 px-4 bg-blue-500/5 rounded-xl border border-blue-500/20 space-y-2">
               <div className="h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
-              <p className="text-blue-500 text-[9px] font-black uppercase tracking-[0.2em]">TUNNELING_CONNECTION...</p>
+              <p className="text-[9px] font-black uppercase tracking-[0.2em]" style={{ color: 'rgb(var(--accent))' }}>Connecting…</p>
             </div>
           )}
 
@@ -223,7 +223,7 @@ export default function VideoFileSharing({ socket, roomId, isHost, onVideoReady,
             <div className="text-center py-7 px-4 bg-emerald-500/5 rounded-xl border border-emerald-500/20" data-testid="party-file-ready">
               <CheckCircle className="h-7 w-7 mx-auto mb-2 text-emerald-500" />
               <p className="text-emerald-500 text-[10px] font-black uppercase tracking-[0.2em] leading-relaxed">
-                Streaming_Live // Bytes_On_Demand
+Streaming — playing now
               </p>
             </div>
           )}
@@ -246,8 +246,8 @@ export default function VideoFileSharing({ socket, roomId, isHost, onVideoReady,
 
       <div className="bg-slate-50 dark:bg-slate-800/10 rounded-xl p-3 border border-slate-200/50 dark:border-slate-800">
         <p className="text-[8px] text-slate-400 dark:text-slate-500 text-center font-black uppercase tracking-[0.2em] leading-relaxed">
-          E2E P2P Pipe // DTLS encrypted, resumable<br/>
-          <span className="text-slate-300 dark:text-slate-650 mt-1 block">Protocols: MP4, WebM, MOV, AVI</span>
+          Encrypted peer-to-peer · starts playing as it streams<br/>
+          <span className="text-slate-300 dark:text-slate-650 mt-1 block">MP4, WebM, MOV</span>
         </p>
       </div>
     </div>
