@@ -4,17 +4,28 @@ import { randomUUID } from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import type { PublicUser, ConversationSummary, MessagesResponse } from '../../shared/protocol.js'
+import type { PublicUser, ConversationSummary, MessagesResponse, VideoState } from '../../shared/protocol.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const dataDir = path.join(__dirname, '..', 'data')
-fs.mkdirSync(dataDir, { recursive: true })
 
-const db = new Database(path.join(dataDir, 'beacon.db'))
+let dbPath = process.env.DB_PATH
+if (!dbPath) {
+  const dataDir = path.join(__dirname, '..', 'data')
+  fs.mkdirSync(dataDir, { recursive: true })
+  dbPath = path.join(dataDir, 'beacon.db')
+} else {
+  fs.mkdirSync(path.dirname(dbPath), { recursive: true })
+}
+
+const db = new Database(dbPath)
 db.pragma('journal_mode = WAL')
 db.pragma('foreign_keys = ON')
 
-db.exec(`
+// ---------- Migrations (PRAGMA user_version) ----------
+
+const MIGRATIONS: string[] = [
+  // v1: initial schema
+  `
   CREATE TABLE IF NOT EXISTS users (
     id            TEXT PRIMARY KEY,
     username      TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -24,7 +35,6 @@ db.exec(`
     last_seen     INTEGER NOT NULL,
     created_at    INTEGER NOT NULL
   );
-
   CREATE TABLE IF NOT EXISTS messages (
     id        TEXT PRIMARY KEY,
     from_id   TEXT NOT NULL REFERENCES users(id),
@@ -33,16 +43,57 @@ db.exec(`
     timestamp INTEGER NOT NULL,
     read      INTEGER NOT NULL DEFAULT 0
   );
-
   CREATE INDEX IF NOT EXISTS idx_messages_pair ON messages (from_id, to_id, timestamp);
   CREATE INDEX IF NOT EXISTS idx_messages_to   ON messages (to_id, timestamp);
-`)
+  `,
+  // v2: guest users (email/password optional) + persistent rooms
+  `
+  CREATE TABLE users_v2 (
+    id            TEXT PRIMARY KEY,
+    username      TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    email         TEXT UNIQUE COLLATE NOCASE,
+    password_hash TEXT,
+    is_guest      INTEGER NOT NULL DEFAULT 0,
+    is_online     INTEGER NOT NULL DEFAULT 0,
+    last_seen     INTEGER NOT NULL,
+    created_at    INTEGER NOT NULL
+  );
+  INSERT INTO users_v2 (id, username, email, password_hash, is_guest, is_online, last_seen, created_at)
+    SELECT id, username, email, password_hash, 0, is_online, last_seen, created_at FROM users;
+  DROP TABLE users;
+  ALTER TABLE users_v2 RENAME TO users;
 
-interface UserRow {
+  CREATE TABLE rooms (
+    id          TEXT PRIMARY KEY,
+    host_id     TEXT NOT NULL,
+    video_url   TEXT,
+    is_playing  INTEGER NOT NULL DEFAULT 0,
+    position    REAL NOT NULL DEFAULT 0,
+    updated_at  INTEGER NOT NULL,
+    created_at  INTEGER NOT NULL,
+    last_active INTEGER NOT NULL
+  );
+  CREATE INDEX idx_rooms_last_active ON rooms (last_active);
+  `,
+]
+
+const migrate = db.transaction(() => {
+  const current = db.pragma('user_version', { simple: true }) as number
+  for (let v = current; v < MIGRATIONS.length; v++) {
+    db.exec(MIGRATIONS[v])
+    db.pragma(`user_version = ${v + 1}`)
+  }
+})
+migrate()
+
+// ---------- Users ----------
+
+export interface UserRow {
   id: string
   username: string
-  email: string
-  password_hash: string
+  email: string | null
+  password_hash: string | null
+  is_guest: number
   is_online: number
   last_seen: number
   created_at: number
@@ -61,7 +112,8 @@ export function toPublicUser(row: UserRow): PublicUser {
   return {
     id: row.id,
     username: row.username,
-    email: row.email,
+    email: row.email ?? undefined,
+    isGuest: !!row.is_guest,
     isOnline: !!row.is_online,
     lastSeen: row.last_seen,
     createdAt: row.created_at,
@@ -69,30 +121,53 @@ export function toPublicUser(row: UserRow): PublicUser {
 }
 
 const insertUser = db.prepare(
-  `INSERT INTO users (id, username, email, password_hash, is_online, last_seen, created_at)
-   VALUES (?, ?, ?, ?, 0, ?, ?)`
+  `INSERT INTO users (id, username, email, password_hash, is_guest, is_online, last_seen, created_at)
+   VALUES (?, ?, ?, ?, ?, 0, ?, ?)`
 )
 const selectUserById = db.prepare(`SELECT * FROM users WHERE id = ?`)
 const selectUserByEmail = db.prepare(`SELECT * FROM users WHERE email = ?`)
 const selectUserByUsername = db.prepare(`SELECT * FROM users WHERE username = ?`)
 const updateOnline = db.prepare(`UPDATE users SET is_online = ?, last_seen = ? WHERE id = ?`)
+const updateUsernameStmt = db.prepare(`UPDATE users SET username = ? WHERE id = ?`)
+const upgradeGuestStmt = db.prepare(
+  `UPDATE users SET username = ?, email = ?, password_hash = ?, is_guest = 0 WHERE id = ?`
+)
 const searchUsersStmt = db.prepare(
-  `SELECT * FROM users WHERE username LIKE ? ESCAPE '\\' ORDER BY username LIMIT 20`
+  `SELECT * FROM users WHERE username LIKE ? ESCAPE '\\' AND is_guest = 0 ORDER BY username LIMIT 20`
 )
 
 export function createUser(username: string, email: string, password: string): UserRow {
   const now = Date.now()
-  const row: UserRow = {
-    id: randomUUID(),
-    username: username.trim(),
-    email: email.trim().toLowerCase(),
-    password_hash: bcrypt.hashSync(password, 12),
-    is_online: 0,
-    last_seen: now,
-    created_at: now,
+  const id = randomUUID()
+  insertUser.run(id, username.trim(), email.trim().toLowerCase(), bcrypt.hashSync(password, 12), 0, now, now)
+  return findUserById(id)!
+}
+
+export function createGuest(username?: string): UserRow {
+  const now = Date.now()
+  const id = randomUUID()
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const name = username && attempt === 0
+      ? username.trim()
+      : `Guest-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
+    try {
+      insertUser.run(id, name, null, null, 1, now, now)
+      return findUserById(id)!
+    } catch (e: any) {
+      if (!String(e.message).includes('UNIQUE')) throw e
+    }
   }
-  insertUser.run(row.id, row.username, row.email, row.password_hash, now, now)
-  return row
+  throw new Error('Could not allocate a unique guest username')
+}
+
+export function upgradeGuestToAccount(id: string, username: string, email: string, password: string): UserRow {
+  upgradeGuestStmt.run(username.trim(), email.trim().toLowerCase(), bcrypt.hashSync(password, 12), id)
+  return findUserById(id)!
+}
+
+export function updateUsername(id: string, username: string): UserRow {
+  updateUsernameStmt.run(username.trim(), id)
+  return findUserById(id)!
 }
 
 export function findUserById(id: string): UserRow | undefined {
@@ -108,6 +183,7 @@ export function findUserByUsername(username: string): UserRow | undefined {
 }
 
 export function verifyPassword(user: UserRow, password: string): boolean {
+  if (!user.password_hash) return false
   return bcrypt.compareSync(password, user.password_hash)
 }
 
@@ -120,6 +196,70 @@ export function searchUsers(query: string): PublicUser[] {
   const rows = searchUsersStmt.all(`%${escaped}%`) as UserRow[]
   return rows.map(toPublicUser)
 }
+
+// ---------- Rooms ----------
+
+export interface RoomRow {
+  id: string
+  host_id: string
+  video_url: string | null
+  is_playing: number
+  position: number
+  updated_at: number
+  created_at: number
+  last_active: number
+}
+
+const insertRoom = db.prepare(
+  `INSERT INTO rooms (id, host_id, video_url, is_playing, position, updated_at, created_at, last_active)
+   VALUES (?, ?, NULL, 0, 0, ?, ?, ?)`
+)
+const selectRoom = db.prepare(`SELECT * FROM rooms WHERE id = ?`)
+const updateRoomVideo = db.prepare(
+  `UPDATE rooms SET video_url = ?, is_playing = ?, position = ?, updated_at = ?, last_active = ? WHERE id = ?`
+)
+const updateRoomHost = db.prepare(`UPDATE rooms SET host_id = ?, last_active = ? WHERE id = ?`)
+const touchRoomStmt = db.prepare(`UPDATE rooms SET last_active = ? WHERE id = ?`)
+const deleteStaleRooms = db.prepare(`DELETE FROM rooms WHERE last_active < ?`)
+
+export function getOrCreateRoom(roomId: string, hostId: string): RoomRow {
+  const existing = selectRoom.get(roomId) as RoomRow | undefined
+  if (existing) return existing
+  const now = Date.now()
+  insertRoom.run(roomId, hostId, now, now, now)
+  return selectRoom.get(roomId) as RoomRow
+}
+
+export function getRoom(roomId: string): RoomRow | undefined {
+  return selectRoom.get(roomId) as RoomRow | undefined
+}
+
+export function setRoomVideoState(roomId: string, state: VideoState): void {
+  updateRoomVideo.run(state.url, state.isPlaying ? 1 : 0, state.currentTime, Date.now(), Date.now(), roomId)
+}
+
+export function setRoomHost(roomId: string, hostId: string): void {
+  updateRoomHost.run(hostId, Date.now(), roomId)
+}
+
+export function touchRoom(roomId: string): void {
+  touchRoomStmt.run(Date.now(), roomId)
+}
+
+/** Current playback state, advancing position by elapsed wall-clock time if playing. */
+export function roomVideoState(room: RoomRow): VideoState {
+  let currentTime = room.position
+  if (room.is_playing) currentTime += (Date.now() - room.updated_at) / 1000
+  return { url: room.video_url, isPlaying: !!room.is_playing, currentTime }
+}
+
+const ROOM_TTL_MS = 24 * 60 * 60 * 1000
+
+export function cleanupStaleRooms(): number {
+  return deleteStaleRooms.run(Date.now() - ROOM_TTL_MS).changes
+}
+
+// ---------- Messages ----------
 
 const insertMessage = db.prepare(
   `INSERT INTO messages (id, from_id, to_id, message, timestamp, read) VALUES (?, ?, ?, ?, ?, 0)`

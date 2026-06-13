@@ -6,7 +6,7 @@ import { Send, Search, User, ArrowLeft, MoreVertical, MessageSquare, ShieldAlert
 import axios from 'axios'
 
 export default function Messages() {
-  const { user } = useAuth()
+  const { user, isGuest } = useAuth()
   const socket = useSocket()
   const [conversations, setConversations] = useState([])
   const [selectedUser, setSelectedUser] = useState(null)
@@ -17,8 +17,8 @@ export default function Messages() {
   const messagesEndRef = useRef(null)
 
   useEffect(() => {
-    fetchConversations()
-  }, [])
+    if (!isGuest) fetchConversations()
+  }, [isGuest])
 
   useEffect(() => {
     if (selectedUser) {
@@ -85,9 +85,28 @@ export default function Messages() {
     fetchConversations()
   }
 
+  if (isGuest) {
+    return (
+      <div className="max-w-[600px] mx-auto px-4 py-24 text-center">
+        <div className="glass-card p-10 border border-slate-200/50 dark:border-slate-800">
+          <ShieldAlert size={36} className="mx-auto mb-4 text-blue-500" />
+          <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-2 uppercase tracking-wide">Direct messages need an account</h2>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mb-8 leading-relaxed">
+            You're browsing as <span className="font-mono text-slate-600 dark:text-slate-300">{user?.username}</span>.
+            Watch parties and file sharing work without an account, but private messages need a persistent identity
+            so friends can find you and your history survives.
+          </p>
+          <Link to="/signup" className="btn btn-primary px-8 h-11 text-xs uppercase tracking-wider inline-flex items-center">
+            Create an account
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-[1200px] mx-auto px-4 py-8 h-[calc(100vh-4rem)] flex gap-6">
-      
+
       {/* Contact Sidebar */}
       <div className="w-80 glass-card flex flex-col overflow-hidden border border-slate-200/50 dark:border-slate-800">
         

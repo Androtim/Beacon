@@ -11,12 +11,21 @@
     "build": "cd client && npm run build",
     "start": "cd server && npm start",
     "install-all": "npm install && cd client && npm install && cd ../server && npm install",
-    "kill-port": "node scripts/kill-port.js"
+    "kill-port": "node scripts/kill-port.js",
+    "test:e2e": "playwright test"
   },
-  "keywords": ["video", "sync", "p2p", "file-sharing", "webrtc"],
+  "keywords": [
+    "video",
+    "sync",
+    "p2p",
+    "file-sharing",
+    "webrtc"
+  ],
   "author": "Beacon Team",
   "license": "MIT",
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "@playwright/test": "^1.60.0",
+    "concurrently": "^8.2.2",
+    "socket.io-client": "^4.8.3"
   }
 }

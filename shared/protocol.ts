@@ -8,6 +8,7 @@ export interface PublicUser {
   id: string
   username: string
   email?: string
+  isGuest?: boolean
   isOnline?: boolean
   lastSeen?: number
   createdAt?: number
@@ -74,7 +75,8 @@ export interface ClientToServerEvents {
   'video-pause': (data: { roomId: string; currentTime: number; timestamp: number }) => void
   'video-seek': (data: { roomId: string; currentTime: number; timestamp: number }) => void
 
-  'chat-message': (data: { roomId: string; username: string; message: string; timestamp: number }) => void
+  // Identity is taken from the authenticated socket; the payload carries only the text.
+  'chat-message': (data: { roomId: string; message: string; timestamp?: number }) => void
   'private-message': (data: { to: string; message: string; timestamp: number }) => void
 
   'file-share-create': (data: { code: string; files: FileInfo[] }) => void
@@ -102,6 +104,8 @@ export interface ServerToClientEvents {
   }) => void
   'user-joined': (data: { participants: Participant[]; user: { id: string; username: string } }) => void
   'user-left': (data: { participants: Participant[]; user: { id: string; username: string } }) => void
+  // Presence refresh without a join/leave announcement (e.g. someone reconnected).
+  'participants-updated': (data: { participants: Participant[] }) => void
   'host-changed': (data: { newHost: string }) => void
 
   'video-url-set': (data: { url: string }) => void

@@ -124,7 +124,7 @@ export default function WatchParty() {
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 px-3 py-1.5 rounded-full border border-blue-100 dark:border-blue-500/20">
                   <Users size={14} className="text-blue-500" />
-                  <span className="text-xs font-bold">{participants.length}</span>
+                  <span className="text-xs font-bold" data-testid="participant-count">{participants.length}</span>
                 </div>
                 <button onClick={() => setShowInfo(!showInfo)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-350">
                   <Info size={20} />
@@ -161,7 +161,7 @@ export default function WatchParty() {
 
             {/* Host Controls */}
             {isHost && (
-              <div className="bg-[var(--bg-primary)] p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-5">
+              <div className="bg-[var(--bg-primary)] p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-5" data-testid="host-controls">
                 <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-800">
                   <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2 uppercase tracking-tight">
                     <Monitor size={16} className="text-blue-500" /> Host Controls
@@ -202,9 +202,10 @@ export default function WatchParty() {
                         placeholder="Enter direct mp4 link (or YouTube link)..."
                         value={urlInput}
                         onChange={(e) => setUrlInput(e.target.value)}
+                        data-testid="video-url-input"
                       />
                     </div>
-                    <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl text-sm font-bold transition-all shadow-md active:scale-95">
+                    <button type="submit" data-testid="video-url-submit" className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl text-sm font-bold transition-all shadow-md active:scale-95">
                       Stream
                     </button>
                   </form>
@@ -231,7 +232,7 @@ export default function WatchParty() {
               <div className="h-2 w-2 bg-emerald-500 rounded-full animate-pulse" />
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-[var(--bg-secondary)]/30">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-[var(--bg-secondary)]/30" data-testid="chat-messages">
               {messages.map((msg, i) => (
                 <div key={i} className={`flex flex-col ${msg.type === 'system' ? 'items-center' : (msg.username === user.username ? 'items-end' : 'items-start')}`}>
                   {msg.type === 'system' ? (
@@ -259,6 +260,7 @@ export default function WatchParty() {
                 placeholder="Broadcast a message..."
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
+                data-testid="chat-input"
               />
               <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white w-9 h-9 flex items-center justify-center rounded-xl transition-all shadow-md active:scale-90">
                 <Send size={15} />

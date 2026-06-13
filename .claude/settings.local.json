@@ -17,7 +17,11 @@
       "Bash(gh auth:*)",
       "Bash(kill:*)",
       "Bash(chmod:*)",
-      "Bash(npm run kill-port:*)"
+      "Bash(npm run kill-port:*)",
+      "Bash(git push:*)",
+      "Bash(git merge:*)",
+      "Bash(git rebase:*)",
+      "Bash(gh pr:*)"
     ],
     "deny": []
   }
