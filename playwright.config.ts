@@ -10,6 +10,10 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:3000',
     trace: 'retain-on-failure',
+    launchOptions: {
+      // Let test videos autoplay with audio so sync tests exercise the real path.
+      args: ['--autoplay-policy=no-user-gesture-required'],
+    },
   },
   webServer: [
     {

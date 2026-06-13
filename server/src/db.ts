@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import type { PublicUser, ConversationSummary, MessagesResponse, VideoState } from '../../shared/protocol.js'
+import type { PublicUser, ConversationSummary, MessagesResponse, PlaybackState } from '../../shared/protocol.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -234,8 +234,8 @@ export function getRoom(roomId: string): RoomRow | undefined {
   return selectRoom.get(roomId) as RoomRow | undefined
 }
 
-export function setRoomVideoState(roomId: string, state: VideoState): void {
-  updateRoomVideo.run(state.url, state.isPlaying ? 1 : 0, state.currentTime, Date.now(), Date.now(), roomId)
+export function setRoomPlayback(roomId: string, state: { url: string | null; isPlaying: boolean; position: number }): void {
+  updateRoomVideo.run(state.url, state.isPlaying ? 1 : 0, state.position, Date.now(), Date.now(), roomId)
 }
 
 export function setRoomHost(roomId: string, hostId: string): void {
@@ -246,11 +246,14 @@ export function touchRoom(roomId: string): void {
   touchRoomStmt.run(Date.now(), roomId)
 }
 
-/** Current playback state, advancing position by elapsed wall-clock time if playing. */
-export function roomVideoState(room: RoomRow): VideoState {
-  let currentTime = room.position
-  if (room.is_playing) currentTime += (Date.now() - room.updated_at) / 1000
-  return { url: room.video_url, isPlaying: !!room.is_playing, currentTime }
+/** Authoritative playback state as stored — clients advance position themselves. */
+export function roomPlaybackState(room: RoomRow): PlaybackState {
+  return {
+    url: room.video_url,
+    isPlaying: !!room.is_playing,
+    position: room.position,
+    atServerTime: room.updated_at,
+  }
 }
 
 const ROOM_TTL_MS = 24 * 60 * 60 * 1000

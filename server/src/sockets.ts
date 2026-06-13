@@ -88,7 +88,7 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
       socket.emit('room-joined', {
         participants: result.participants,
         isHost: result.isHost,
-        videoState: result.videoState,
+        playback: result.playback,
         fileShare: roomFileShares.get(roomId) ?? null,
       })
       if (result.rejoined) {
@@ -106,31 +106,18 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
       if (result.newHostId) io.to(roomId).emit('host-changed', { newHost: result.newHostId })
     })
 
-    // ---- Video state (host-controlled) ----
+    // ---- Video state (host intents -> authoritative broadcast) ----
 
-    on('video-url-set', ({ roomId, url }) => {
+    function broadcastPlayback(roomId: string, intent: Parameters<typeof rooms.applyPlaybackIntent>[1]) {
       if (!rooms.isHost(roomId, userId)) return
-      const state = rooms.updateVideoState(roomId, { url, isPlaying: false, currentTime: 0 })
-      if (state) io.to(roomId).emit('video-url-set', { url })
-    })
+      const playback = rooms.applyPlaybackIntent(roomId, intent)
+      if (playback) io.to(roomId).emit('video-state', { playback })
+    }
 
-    on('video-play', ({ roomId, currentTime }) => {
-      if (!rooms.isHost(roomId, userId)) return
-      const state = rooms.updateVideoState(roomId, { isPlaying: true, currentTime })
-      if (state) io.to(roomId).emit('video-play', { currentTime, timestamp: Date.now() })
-    })
-
-    on('video-pause', ({ roomId, currentTime }) => {
-      if (!rooms.isHost(roomId, userId)) return
-      const state = rooms.updateVideoState(roomId, { isPlaying: false, currentTime })
-      if (state) io.to(roomId).emit('video-pause', { currentTime })
-    })
-
-    on('video-seek', ({ roomId, currentTime }) => {
-      if (!rooms.isHost(roomId, userId)) return
-      const state = rooms.updateVideoState(roomId, { currentTime })
-      if (state) io.to(roomId).emit('video-seek', { currentTime })
-    })
+    on('video-url-set', ({ roomId, url }) => broadcastPlayback(roomId, { url, isPlaying: false, position: 0 }))
+    on('video-play', ({ roomId, currentTime }) => broadcastPlayback(roomId, { isPlaying: true, position: currentTime }))
+    on('video-pause', ({ roomId, currentTime }) => broadcastPlayback(roomId, { isPlaying: false, position: currentTime }))
+    on('video-seek', ({ roomId, currentTime }) => broadcastPlayback(roomId, { position: currentTime }))
 
     // ---- Chat ----
 

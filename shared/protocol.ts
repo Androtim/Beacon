@@ -26,6 +26,15 @@ export interface VideoState {
   currentTime: number
 }
 
+// Authoritative playback state (see shared/sync.ts). The server broadcasts
+// this on every change; clients steer their players toward it.
+export interface PlaybackState {
+  url: string | null
+  isPlaying: boolean
+  position: number
+  atServerTime: number
+}
+
 export interface FileInfo {
   name: string
   size: number
@@ -99,19 +108,16 @@ export interface ServerToClientEvents {
   'room-joined': (data: {
     participants: Participant[]
     isHost: boolean
-    videoState: VideoState
+    playback: PlaybackState
     fileShare: RoomFileShare | null
   }) => void
+  // Single authoritative playback broadcast — replaces per-action video events.
+  'video-state': (data: { playback: PlaybackState }) => void
   'user-joined': (data: { participants: Participant[]; user: { id: string; username: string } }) => void
   'user-left': (data: { participants: Participant[]; user: { id: string; username: string } }) => void
   // Presence refresh without a join/leave announcement (e.g. someone reconnected).
   'participants-updated': (data: { participants: Participant[] }) => void
   'host-changed': (data: { newHost: string }) => void
-
-  'video-url-set': (data: { url: string }) => void
-  'video-play': (data: { currentTime: number; timestamp: number }) => void
-  'video-pause': (data: { currentTime: number }) => void
-  'video-seek': (data: { currentTime: number }) => void
 
   'chat-message': (data: ChatMessage) => void
   'private-message': (data: PrivateMessage) => void
