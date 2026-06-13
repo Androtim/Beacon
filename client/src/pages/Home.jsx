@@ -83,7 +83,7 @@ export default function Home() {
                 <div className="text-left max-w-xl">
                   <h2 className="text-lg font-bold text-slate-800 dark:text-slate-250"> Watch Party Terminal </h2>
                   <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 leading-relaxed">
-                    Instantly spin up a private watch party room. Paste direct URLs, HLS streams, or broadcast local video files peer-to-peer. Playback controls seek and synchronize instantly for all operators.
+                    Instantly spin up a private watch party room. Paste direct video URLs, sync a YouTube video, or broadcast local video files peer-to-peer. Playback controls seek and synchronize instantly for all operators.
                   </p>
                 </div>
 

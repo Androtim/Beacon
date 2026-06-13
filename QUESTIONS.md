@@ -1,51 +1,52 @@
-# Questions & overnight decisions — for Androtim
+# Beacon — decisions log & open items
 
-Decisions I made on your behalf during the autonomous overnight run, plus open
-questions. Nothing here blocks the work; answer whenever.
+Decisions made during the autonomous rebuild, plus what's still open.
 
-## Decisions made (flag if you disagree)
+## Resolved
 
-1. **Phase 1 merged (PR #3).** Self-reviewed with a multi-agent code review,
-   fixed 4 findings (stale socket identity after rename, undefined coercion,
-   file-share session purging, protocol type cleanup), all 7 tests green.
+- **HLS streams (.m3u8): dropped.** You confirmed you don't use them. Native
+  `<video>` (mp4/webm/mov/blob) + YouTube cover all sources. The HLS mention
+  was removed from the UI copy. (If that ever changes, hls.js is ~1 day to add.)
+- **Stale branches deleted.** `feat/p2p-stability-and-mobile-ui` and `staging`
+  (both pre-rebuild, 0 commits ahead of main) are gone; all merged phase
+  branches were auto-deleted. Only `main` remains.
+- **Video controls are host-only**, enforced server-side. Say so if you want an
+  "anyone can control" room option later.
+- **Player is native HTML5 video**, not Video.js (Video.js fought the sync
+  engine and caused the dispose/recreate crashes).
+- **Chat timestamps are server-assigned** (clients can't forge message times).
 
-2. **Video controls are now host-only, enforced server-side.** The old server
-   let any participant emit play/pause/seek for the room. The UI only ever
-   exposed controls to the host, so nothing visible changed — but if you want
-   "anyone can control playback" as a room option, say so and I'll add a room
-   setting in a later phase.
+## Still open
 
-3. **Phase 2 player: native HTML5 video instead of Video.js for direct URLs.**
-   Video.js fought the sync engine (it wraps events and made
-   programmatic-vs-user action detection unreliable) and is the source of the
-   dispose/recreate crashes. Native <video> handles mp4/webm/mov/blob. The one
-   loss: **HLS streams (.m3u8) no longer play** — that needs hls.js (~1 day to
-   add back). Question: do you actually use HLS streams? If yes I'll add hls.js
-   support in Phase 3/5.
+### 1. TURN server (only thing blocking cross-network P2P)
 
-4. **Chat timestamps are server-assigned** (clients can't fake message times).
+Without TURN, P2P connects for ~80–85% of network pairs; strict/corporate/
+mobile-carrier NATs need a relay. Setup is ~5 minutes and free:
 
-## Overnight build notes (Phase 4)
+1. Sign up at **https://www.metered.ca/tools/openrelay/** (free tier: 20 GB/mo
+   relayed — only the unlucky NAT pairs ever use it) or run your own coturn.
+2. From the dashboard, copy the TURN URL, username, and credential.
+3. Add them to `server/.env`:
+   ```
+   TURN_SERVER_URL=turn:your-subdomain.metered.live:80
+   TURN_SERVER_USERNAME=your-username
+   TURN_SERVER_PASSWORD=your-credential
+   ```
+4. Restart the server. The `/api/ice-servers` endpoint already picks these up
+   and hands them to every browser automatically — no code change needed.
 
-- **DMs are now E2E encrypted** (ECDH P-256 + AES-GCM via WebCrypto). The
-  server stores only `{v:1, iv, ct}` envelopes — verified by a test that reads
-  the raw API as the server sees it. Two follow-ups deliberately deferred:
-  - Keys are **per-device** (IndexedDB, non-extractable). A new device can't
-    read old messages — the passphrase key-backup you approved is the fix,
-    needs UI, planned with Phase 5.
-  - The **device-only/opt-in-mailbox toggle** you chose: right now offline
-    messages always park on the server as ciphertext (= mailbox always on).
-    Making device-only the default needs local-first history storage; also
-    planned with Phase 5. Privacy-wise the server can't read anything either way.
-- Old plaintext DMs from before tonight still display fine (legacy fallback).
+(I can't do step 1–2: it needs an email signup. Everything after is wired.)
 
-## Open questions (answer when you're back)
+### 2. Deferred to Phase 5 (UI/PWA)
 
-- **TURN server**: the code reads TURN_SERVER_URL/USERNAME/PASSWORD from
-  server/.env but nothing is configured. For internet-grade P2P you'll want a
-  free account at a managed TURN provider (e.g. metered.ca free tier / Open
-  Relay) — takes 5 minutes, then paste the 3 values into server/.env. I can't
-  create the account for you (needs an email signup).
-- **HLS streams** — see decision 3 above.
-- The old `feat/p2p-stability-and-mobile-ui` and `staging` remote branches are
-  fully merged and stale. OK to delete them on GitHub? (I left them alone.)
+- **DM key backup** — encryption keys are per-device today (a new device can't
+  read old messages). The passphrase-protected backup you approved needs UI.
+- **Device-only DM delivery toggle** — right now undelivered messages park on
+  the server as ciphertext (mailbox always on). Making device-only the default
+  needs local-first history. Either way the server can't read anything.
+
+## Note for Phase 5
+
+UI overhaul + PWA is the last phase and is intentionally not started — it needs
+your design direction. DESIGN.md says "premium, dark-first, glassmorphism";
+confirm or redirect when ready.
