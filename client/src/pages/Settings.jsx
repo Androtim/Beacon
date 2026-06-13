@@ -1,205 +1,81 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
-import { ArrowLeft, User, Mail, Bell, Moon, Sun, LogOut, ShieldCheck } from 'lucide-react';
-import '../index.css';
+import { useState, useEffect } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+import Appearance from '../components/Appearance'
+import { ArrowLeft, User, Palette, LogOut } from 'lucide-react'
 
-const Settings = () => {
-  const { user, logout, rename, isGuest } = useAuth();
-  const { theme, toggleTheme } = useTheme();
-  const navigate = useNavigate();
+export default function Settings() {
+  const { user, logout, rename, isGuest } = useAuth()
+  const navigate = useNavigate()
 
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [notifications, setNotifications] = useState(true);
-  const [saveStatus, setSaveStatus] = useState(null);
+  const [name, setName] = useState('')
+  const [saveStatus, setSaveStatus] = useState(null)
+
+  useEffect(() => { if (user) setName(user.username || '') }, [user])
 
   const handleSaveProfile = async () => {
-    const trimmed = name.trim();
-    if (!trimmed || trimmed === user?.username) return;
-    setSaveStatus('saving');
-    const result = await rename(trimmed);
-    setSaveStatus(result.success ? 'saved' : result.error);
-    if (result.success) setTimeout(() => setSaveStatus(null), 2000);
-  };
+    const trimmed = name.trim()
+    if (!trimmed || trimmed === user?.username) return
+    setSaveStatus('saving')
+    const result = await rename(trimmed)
+    setSaveStatus(result.success ? 'saved' : result.error)
+    if (result.success) setTimeout(() => setSaveStatus(null), 2000)
+  }
 
-  useEffect(() => {
-    if (user) {
-      setName(user.username || user.name || "");
-      setEmail(user.email || "");
-    }
-  }, [user]);
+  const handleSignOut = async () => { await logout(); navigate('/') }
 
-  // Validation Test: Verify background and text colors on theme change
-  const [testResult, setTestResult] = useState("Waiting for theme change...");
-  
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const bodyStyles = getComputedStyle(document.body);
-      const bgColor = bodyStyles.backgroundColor;
-      const textColor = bodyStyles.color;
-      let status = "PASS";
-      
-      // Adapted verification boundaries to include the new custom HSL premium palette
-      if (theme === 'dark') {
-        const isDarkBG = bgColor.includes('11, 15, 25') || bgColor.includes('0b0f19') || bgColor.includes('15, 23, 42') || bgColor.includes('0f172a');
-        if (!isDarkBG) status = "FAIL (BG)";
-        if (!textColor.includes('245, 245, 247') && !textColor.includes('f5f5f7') && !textColor.includes('248, 250, 252') && !textColor.includes('f8fafc')) status = "FAIL (Text)";
-      } else {
-        const isLightBG = bgColor.includes('251, 251, 253') || bgColor.includes('fbfbfd') || bgColor.includes('248, 250, 252') || bgColor.includes('f8fafc');
-        if (!isLightBG) status = "FAIL (BG)";
-        if (!textColor.includes('29, 29, 31') && !textColor.includes('1d1d1f') && !textColor.includes('15, 23, 42') && !textColor.includes('0f172a')) status = "FAIL (Text)";
-      }
-      
-      setTestResult(`[${status}] Theme: ${theme} | BG: ${bgColor} | Text: ${textColor}`);
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [theme]);
-
-  // Logging out drops back to a fresh guest identity, so home is the natural place to land.
-  const handleSignOut = async () => {
-    await logout();
-    navigate('/');
-  };
+  const sectionTitle = (Icon, label) => (
+    <div className="flex items-center gap-3 mb-5">
+      <div className="w-9 h-9 rounded-xl grid place-items-center" style={{ background: 'rgb(var(--accent) / 0.14)', color: 'rgb(var(--accent))' }}>
+        <Icon size={17} />
+      </div>
+      <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>{label}</h3>
+    </div>
+  )
 
   return (
-    <div className="min-h-screen py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-2xl mx-auto space-y-8">
-        
-        {/* Header */}
-        <header className="flex items-center space-x-4">
-          <Link to="/" className="p-2.5 rounded-xl glass-card hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-            <ArrowLeft className="w-5 h-5 text-slate-600 dark:text-slate-350" />
-          </Link>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white uppercase tracking-tight">System Settings</h2>
-        </header>
+    <div className="max-w-3xl mx-auto px-5 sm:px-8 py-8 lg:py-12 space-y-6">
+      <header className="flex items-center gap-3">
+        <Link to="/" className="nav-item !px-2.5 !py-2.5"><ArrowLeft size={18} /></Link>
+        <h1 className="text-2xl font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>Settings</h1>
+      </header>
 
-        <main className="space-y-6">
-          {/* Profile Section */}
-          <section className="glass-card p-6 border border-slate-200/50 dark:border-slate-800">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl">
-                <User className="w-5 h-5" />
-              </div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Profile Manifest</h3>
-            </div>
-            
-            <div className="space-y-5">
-              <div>
-                <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Operator Name</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <User className="h-4 w-4 text-slate-450 dark:text-slate-500" />
-                  </div>
-                  <input 
-                    type="text" 
-                    className="pl-10 input-field" 
-                    value={name} 
-                    onChange={(e) => setName(e.target.value)} 
-                    placeholder="Operator ID"
-                  />
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Secure Routing Address</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <Mail className="h-4 w-4 text-slate-450 dark:text-slate-500" />
-                  </div>
-                  <input
-                    type="email"
-                    className="pl-10 input-field opacity-60"
-                    value={isGuest ? 'Guest session — no email' : email}
-                    disabled
-                    placeholder="operator@beacon.sec"
-                  />
-                </div>
-              </div>
-
-              <button onClick={handleSaveProfile} className="btn btn-primary w-full mt-2 h-11 text-xs uppercase tracking-wider" disabled={saveStatus === 'saving'}>
-                {saveStatus === 'saving' ? 'Syncing...' : saveStatus === 'saved' ? 'Saved ✓' : 'Sync Profile Updates'}
-              </button>
-              {saveStatus && saveStatus !== 'saving' && saveStatus !== 'saved' && (
-                <p className="text-[10px] text-rose-500 font-bold uppercase tracking-wider text-center">{saveStatus}</p>
-              )}
-              {isGuest && (
-                <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center leading-relaxed">
-                  You're a guest — your name works everywhere, but DMs and persistent history need an account.{' '}
-                  <Link to="/signup" className="text-blue-500 font-bold">Create one</Link> to keep this identity.
-                </p>
-              )}
-            </div>
-          </section>
-
-          {/* Preferences Section */}
-          <section className="glass-card p-6 border border-slate-200/50 dark:border-slate-800">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">System Parameters</h3>
-            </div>
-            
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-slate-100 dark:bg-slate-800/80 text-slate-550 dark:text-slate-400 rounded-xl">
-                    <Bell className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <span className="block text-xs font-bold text-slate-800 dark:text-slate-200">Alerts System</span>
-                    <span className="text-[10px] text-slate-400 dark:text-slate-500">Enable real-time notification warnings</span>
-                  </div>
-                </div>
-                <button 
-                  type="button"
-                  onClick={() => setNotifications(!notifications)}
-                  className={`${notifications ? 'bg-blue-650 dark:bg-indigo-600' : 'bg-slate-200 dark:bg-slate-800'} relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none`}
-                >
-                  <span className={`${notifications ? 'translate-x-5' : 'translate-x-0'} pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white dark:bg-slate-900 shadow ring-0 transition duration-200 ease-in-out`} />
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-slate-100 dark:bg-slate-800/80 text-slate-550 dark:text-slate-400 rounded-xl">
-                    {theme === 'dark' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-                  </div>
-                  <div>
-                    <span className="block text-xs font-bold text-slate-800 dark:text-slate-200">Dark Theme Mode</span>
-                    <span className="text-[10px] text-slate-400 dark:text-slate-500">Toggle dark room interface</span>
-                  </div>
-                </div>
-                <button 
-                  type="button"
-                  onClick={toggleTheme}
-                  className={`${theme === 'dark' ? 'bg-blue-650 dark:bg-indigo-600' : 'bg-slate-200 dark:bg-slate-800'} relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none`}
-                >
-                  <span className={`${theme === 'dark' ? 'translate-x-5' : 'translate-x-0'} pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white dark:bg-slate-900 shadow ring-0 transition duration-200 ease-in-out`} />
-                </button>
-              </div>
-            </div>
-          </section>
-
-          {/* Danger Zone */}
-          <button 
-            onClick={handleSignOut}
-            className="w-full flex items-center justify-center gap-2 py-3 h-11 rounded-xl font-bold text-xs uppercase tracking-wider text-rose-500 bg-rose-500/5 dark:bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/10 dark:hover:bg-rose-500/25 transition-all active:scale-[0.98]"
-          >
-            <LogOut className="w-4.5 h-4.5" />
-            Terminate Routing Session
-          </button>
-
-          {/* Validation Test Display */}
-          <div className="mt-8 p-3.5 bg-slate-100 dark:bg-slate-900/60 rounded-xl text-[10px] font-mono text-slate-400 dark:text-slate-500 text-center border border-slate-200/50 dark:border-slate-850">
-            {testResult}
+      {/* Profile */}
+      <section className="glass-card p-6">
+        {sectionTitle(User, 'Profile')}
+        <div className="space-y-4">
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-secondary)' }}>Display name</label>
+            <input type="text" className="input-field" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
           </div>
-        </main>
-      </div>
-    </div>
-  );
-};
+          <button onClick={handleSaveProfile} className="btn btn-primary w-full h-11 text-xs" disabled={saveStatus === 'saving'}>
+            {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved ✓' : 'Save name'}
+          </button>
+          {saveStatus && saveStatus !== 'saving' && saveStatus !== 'saved' && (
+            <p className="text-[11px] text-rose-400 text-center">{saveStatus}</p>
+          )}
+          {isGuest && (
+            <p className="text-[11px] text-center leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+              You're a guest — your name works everywhere, but DMs and saved history need an account.{' '}
+              <Link to="/signup" style={{ color: 'rgb(var(--accent))' }} className="font-bold">Create one</Link>.
+            </p>
+          )}
+        </div>
+      </section>
 
-export default Settings;
+      {/* Appearance / customization */}
+      <section className="glass-card p-6">
+        {sectionTitle(Palette, 'Appearance')}
+        <Appearance />
+      </section>
+
+      <button
+        onClick={handleSignOut}
+        className="w-full flex items-center justify-center gap-2 h-11 rounded-xl font-bold text-xs uppercase tracking-wider text-rose-400 border transition-all active:scale-[0.98]"
+        style={{ background: 'rgb(244 63 94 / 0.08)', borderColor: 'rgb(244 63 94 / 0.25)' }}
+      >
+        <LogOut size={16} /> {isGuest ? 'Reset guest session' : 'Sign out'}
+      </button>
+    </div>
+  )
+}
