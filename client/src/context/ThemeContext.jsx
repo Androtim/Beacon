@@ -2,8 +2,19 @@ import { createContext, useContext, useState, useEffect, useCallback, useMemo } 
 import { PRESETS, DEFAULT_PRESET } from '../lib/themes'
 
 const ThemeContext = createContext()
-const STORAGE_KEY = 'beacon-theme'
+const STORAGE_KEY = 'beacon-theme-v2'
 const CUSTOM_CSS_STYLE_ID = 'beacon-custom-css'
+
+// A Beacon theme is two slots — one for dark, one for light — each a preset id
+// plus per-token overrides. The active `mode` chooses which slot is live.
+// Defaults: dark = Crystal, light = Daylight (so light mode is actually light).
+const DEFAULTS = {
+  mode: 'dark',
+  dark: { presetId: 'crystal', overrides: {} },
+  light: { presetId: 'daylight', overrides: {} },
+  motion: true,
+  customCss: '',
+}
 
 export function useTheme() {
   const context = useContext(ThemeContext)
@@ -12,60 +23,60 @@ export function useTheme() {
 }
 
 function loadState() {
-  const base = { presetId: DEFAULT_PRESET, overrides: {}, motion: true, customCss: '' }
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
       const p = JSON.parse(raw)
       return {
-        presetId: PRESETS[p.presetId] ? p.presetId : DEFAULT_PRESET,
-        overrides: p.overrides && typeof p.overrides === 'object' ? p.overrides : {},
+        mode: p.mode === 'light' ? 'light' : 'dark',
+        dark: validSlot(p.dark, 'crystal'),
+        light: validSlot(p.light, 'daylight'),
         motion: p.motion !== false,
         customCss: typeof p.customCss === 'string' ? p.customCss : '',
       }
     }
   } catch {
-    // ignore
+    // ignore — fall through to defaults
   }
-  return base
+  return structuredClone(DEFAULTS)
 }
 
-function resolveTokens(presetId, overrides) {
-  const preset = PRESETS[presetId] ?? PRESETS[DEFAULT_PRESET]
-  return { ...preset.tokens, ...overrides }
+function validSlot(slot, fallbackPreset) {
+  const presetId = slot && PRESETS[slot.presetId] ? slot.presetId : fallbackPreset
+  const overrides = slot && slot.overrides && typeof slot.overrides === 'object' ? slot.overrides : {}
+  return { presetId, overrides }
 }
 
-function applyToDom({ presetId, overrides, motion, customCss }) {
-  const preset = PRESETS[presetId] ?? PRESETS[DEFAULT_PRESET]
-  const mode = overrides['--mode'] ?? preset.mode
-  document.documentElement.classList.toggle('dark', mode === 'dark')
-  document.documentElement.dataset.motion = motion ? 'on' : 'off'
+export function resolveTokens(slot) {
+  const preset = PRESETS[slot.presetId] ?? PRESETS[DEFAULT_PRESET]
+  return { ...preset.tokens, ...slot.overrides }
+}
+
+function applyToDom(state) {
+  const slot = state[state.mode]
+  document.documentElement.classList.toggle('dark', state.mode === 'dark')
+  document.documentElement.style.colorScheme = state.mode
+  document.documentElement.dataset.motion = state.motion ? 'on' : 'off'
 
   const root = document.documentElement
-  for (const [key, value] of Object.entries(resolveTokens(presetId, overrides))) {
-    if (key === '--mode') continue
+  for (const [key, value] of Object.entries(resolveTokens(slot))) {
     root.style.setProperty(key, value)
   }
 
-  // Tinkerer custom CSS goes in a managed <style>; cleared when empty.
   let styleEl = document.getElementById(CUSTOM_CSS_STYLE_ID)
-  if (customCss) {
+  if (state.customCss) {
     if (!styleEl) {
       styleEl = document.createElement('style')
       styleEl.id = CUSTOM_CSS_STYLE_ID
       document.head.appendChild(styleEl)
     }
-    styleEl.textContent = customCss
+    styleEl.textContent = state.customCss
   } else if (styleEl) {
     styleEl.remove()
   }
 }
 
-/**
- * Light validation for Tinkerer custom CSS — true browser CSS parsing has no
- * error API, so we balance-check braces and block the few genuinely dangerous
- * constructs. Returns { ok, error }.
- */
+/** Light validation for Tinkerer custom CSS — returns { ok, error }. */
 export function validateCustomCss(css) {
   if (typeof css !== 'string') return { ok: false, error: 'Not a string' }
   if (/@import|javascript:|expression\(|<\/?style/i.test(css)) {
@@ -82,7 +93,6 @@ export function validateCustomCss(css) {
 
 export function ThemeProvider({ children }) {
   const [state, setState] = useState(loadState)
-  const { presetId, overrides, motion, customCss } = state
 
   useEffect(() => {
     applyToDom(state)
@@ -93,61 +103,59 @@ export function ThemeProvider({ children }) {
     }
   }, [state])
 
-  const preset = PRESETS[presetId] ?? PRESETS[DEFAULT_PRESET]
-  const mode = overrides['--mode'] ?? preset.mode
+  const { mode, motion, customCss } = state
 
-  const setPreset = useCallback((id) => {
-    if (PRESETS[id]) setState((s) => ({ ...s, presetId: id, overrides: {} }))
-  }, [])
-  const setToken = useCallback((key, value) => {
-    setState((s) => ({ ...s, overrides: { ...s.overrides, [key]: value } }))
-  }, [])
+  // Switch the live mode (dark/light) — applies the matching saved slot.
   const setMode = useCallback((next) => {
-    setState((s) => ({ ...s, overrides: { ...s.overrides, '--mode': next } }))
+    setState((s) => ({ ...s, mode: next === 'light' ? 'light' : 'dark' }))
   }, [])
+  const toggleTheme = useCallback(() => {
+    setState((s) => ({ ...s, mode: s.mode === 'dark' ? 'light' : 'dark' }))
+  }, [])
+
+  // Commit an edited theme to a slot ('dark' | 'light').
+  const saveTheme = useCallback((slotName, slot) => {
+    setState((s) => ({ ...s, [slotName]: validSlot(slot, s[slotName].presetId) }))
+  }, [])
+
   const setMotion = useCallback((on) => setState((s) => ({ ...s, motion: !!on })), [])
   const setCustomCss = useCallback((css) => setState((s) => ({ ...s, customCss: css })), [])
-  const resetToDefault = useCallback(() => {
-    setState({ presetId: DEFAULT_PRESET, overrides: {}, motion: true, customCss: '' })
-  }, [])
-  const toggleTheme = useCallback(() => setMode(mode === 'dark' ? 'light' : 'dark'), [mode, setMode])
+  const resetToDefault = useCallback(() => setState(structuredClone(DEFAULTS)), [])
 
-  // Shareable theme = tokens only (no raw CSS — see the privacy decision).
+  // Shareable theme = the active slot's tokens (no raw CSS).
   const exportTheme = useCallback(() => {
-    const payload = { presetId, overrides, motion }
+    const payload = { mode, slot: state[mode] }
     return btoa(unescape(encodeURIComponent(JSON.stringify(payload))))
-  }, [presetId, overrides, motion])
+  }, [mode, state])
   const importTheme = useCallback((code) => {
     try {
       const p = JSON.parse(decodeURIComponent(escape(atob(code.trim()))))
-      if (!PRESETS[p.presetId]) return { ok: false, error: 'Unknown preset in theme code' }
-      setState((s) => ({
-        ...s,
-        presetId: p.presetId,
-        overrides: p.overrides && typeof p.overrides === 'object' ? p.overrides : {},
-        motion: p.motion !== false,
-      }))
+      const slot = validSlot(p.slot, DEFAULT_PRESET)
+      setState((s) => ({ ...s, [s.mode]: slot }))
       return { ok: true }
     } catch {
       return { ok: false, error: 'That theme code could not be read' }
     }
   }, [])
 
-  const isCustomized = useMemo(
-    () => presetId !== DEFAULT_PRESET || Object.keys(overrides).length > 0 || !!customCss || !motion,
-    [presetId, overrides, customCss, motion],
-  )
+  const isCustomized = useMemo(() => {
+    const dirty = (slot, def) => slot.presetId !== def.presetId || Object.keys(slot.overrides).length > 0
+    return dirty(state.dark, DEFAULTS.dark) || dirty(state.light, DEFAULTS.light) || !!customCss || !motion
+  }, [state, customCss, motion])
 
   const value = useMemo(() => ({
-    presetId, preset, overrides, mode, motion, customCss,
+    mode,
     theme: mode, // back-compat alias
-    tokens: resolveTokens(presetId, overrides),
+    motion,
+    customCss,
+    activeSlot: state[mode],
+    getSlot: (m) => state[m],
     presets: PRESETS,
+    resolveTokens,
     isCustomized,
-    setPreset, setToken, setMode, setMotion, setCustomCss, resetToDefault, toggleTheme,
+    setMode, toggleTheme, saveTheme, setMotion, setCustomCss, resetToDefault,
     exportTheme, importTheme, validateCustomCss,
-  }), [presetId, preset, overrides, mode, motion, customCss, isCustomized,
-       setPreset, setToken, setMode, setMotion, setCustomCss, resetToDefault, toggleTheme, exportTheme, importTheme])
+  }), [mode, motion, customCss, state, isCustomized, setMode, toggleTheme, saveTheme, setMotion, setCustomCss, resetToDefault, exportTheme, importTheme])
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
 }
