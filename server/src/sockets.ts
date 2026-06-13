@@ -107,18 +107,32 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
       if (result.newHostId) io.to(roomId).emit('host-changed', { newHost: result.newHostId })
     })
 
-    // ---- Video state (host intents -> authoritative broadcast) ----
+    // ---- Video state ----
+    // Playback control (play/pause/seek) is shared: any participant in the room
+    // can drive it. Setting the source (video-url-set) stays host-only — that's
+    // the owner-authorized "what are we watching" decision.
 
-    function broadcastPlayback(roomId: string, intent: Parameters<typeof rooms.applyPlaybackIntent>[1]) {
-      if (!rooms.isHost(roomId, userId)) return
+    function applyAndBroadcast(roomId: string, intent: Parameters<typeof rooms.applyPlaybackIntent>[1]) {
       const playback = rooms.applyPlaybackIntent(roomId, intent)
       if (playback) io.to(roomId).emit('video-state', { playback })
     }
 
-    on('video-url-set', ({ roomId, url }) => broadcastPlayback(roomId, { url, isPlaying: false, position: 0 }))
-    on('video-play', ({ roomId, currentTime }) => broadcastPlayback(roomId, { isPlaying: true, position: currentTime }))
-    on('video-pause', ({ roomId, currentTime }) => broadcastPlayback(roomId, { isPlaying: false, position: currentTime }))
-    on('video-seek', ({ roomId, currentTime }) => broadcastPlayback(roomId, { position: currentTime }))
+    on('video-url-set', ({ roomId, url }) => {
+      if (!rooms.isHost(roomId, userId)) return
+      applyAndBroadcast(roomId, { url, isPlaying: false, position: 0 })
+    })
+    on('video-play', ({ roomId, currentTime }) => {
+      if (!rooms.liveParticipant(roomId, userId)) return
+      applyAndBroadcast(roomId, { isPlaying: true, position: currentTime })
+    })
+    on('video-pause', ({ roomId, currentTime }) => {
+      if (!rooms.liveParticipant(roomId, userId)) return
+      applyAndBroadcast(roomId, { isPlaying: false, position: currentTime })
+    })
+    on('video-seek', ({ roomId, currentTime }) => {
+      if (!rooms.liveParticipant(roomId, userId)) return
+      applyAndBroadcast(roomId, { position: currentTime })
+    })
 
     // ---- Chat ----
 
