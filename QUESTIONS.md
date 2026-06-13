@@ -16,6 +16,26 @@ Decisions made during the autonomous rebuild, plus what's still open.
   engine and caused the dispose/recreate crashes).
 - **Chat timestamps are server-assigned** (clients can't forge message times).
 
+## Known issue — Firefox + the Metered TURN relay
+
+Diagnosed 2026-06-13 from your Chrome-host → Firefox-participant test (it hung
+forever). Two findings:
+
+1. **Fixed: the infinite "connecting" hang.** P2P connections now time out
+   after 25s (and Firefox's ICE-failure is now detected — we previously only
+   watched `connectionState`, which Firefox doesn't drive). A failed connection
+   shows "Couldn't connect" with Try again / Cancel instead of spinning forever.
+   Applies to both watch-party file sharing and share-code transfers.
+
+2. **Open: Firefox can't use the current TURN relay.** Testing showed Chromium
+   gathers relay candidates from `standard.relay.metered.ca` fine, but **Firefox
+   gets zero** on every transport (80/443, udp/tcp/tls). So Chrome↔Firefox (and
+   Firefox on a restrictive network) can't connect via relay. Chrome↔Chrome and
+   same-network cases are unaffected. Likely the free shared Metered relay; next
+   step is to try a different TURN provider/credentials and re-test Firefox, or
+   confirm on two real machines on different networks. Not a code bug — a relay
+   reachability gap.
+
 ## Still open
 
 ### 1. TURN server (only thing blocking cross-network P2P)

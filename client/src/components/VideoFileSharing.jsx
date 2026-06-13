@@ -97,6 +97,7 @@ export default function VideoFileSharing({ socket, roomId, isHost, onVideoReady,
   }, [socket, isHost, serveTo, cancelTransfer])
 
   const participantStatus = phase === 'done' ? 'ready'
+    : status === 'error' ? 'error' // a failed/timed-out connection wins over the spinner
     : phase === 'accepted' ? 'connecting'
     : phase // idle | pending
 
@@ -227,11 +228,17 @@ export default function VideoFileSharing({ socket, roomId, isHost, onVideoReady,
             </div>
           )}
 
-          {participantStatus !== 'ready' && status === 'error' && (
-            <div className="bg-rose-500/5 border border-rose-500/20 rounded-xl p-5 text-center space-y-3">
+          {participantStatus === 'error' && (
+            <div className="bg-rose-500/5 border border-rose-500/20 rounded-xl p-5 text-center space-y-3" data-testid="party-connection-failed">
               <AlertCircle className="h-8 w-8 mx-auto text-rose-500" />
-              <p className="text-rose-500 font-black text-[10px] uppercase tracking-[0.2em]">CONNECTION_FAILED</p>
-              <button onClick={cancelTransfer} className="btn btn-secondary w-full h-9 text-[9px]">RETRY</button>
+              <p className="text-rose-500 font-black text-[10px] uppercase tracking-[0.2em]">Couldn't connect</p>
+              <p className="text-slate-400 text-[9px] leading-relaxed">The direct connection couldn't be established. This can happen on restrictive networks.</p>
+              <div className="flex gap-2">
+                {pendingHostId && (
+                  <button onClick={acceptFileTransfer} className="btn btn-primary flex-1 h-9 text-[9px]" data-testid="party-retry">Try again</button>
+                )}
+                <button onClick={cancelTransfer} className="btn btn-secondary flex-1 h-9 text-[9px]">Cancel</button>
+              </div>
             </div>
           )}
         </div>
