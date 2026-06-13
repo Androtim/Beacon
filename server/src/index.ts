@@ -102,12 +102,17 @@ async function resolveTurnServers(): Promise<IceServer[]> {
 }
 
 app.get('/api/ice-servers', authenticateToken, async (_req, res) => {
-  const stun: IceServer[] = [
+  // Keep the list short and Firefox-friendly: Firefox warns and degrades ICE
+  // discovery with 5+ servers. One STUN + the two best TURN transports
+  // (preferring :443, which traverses firewalls) is plenty.
+  const resolved = await resolveTurnServers()
+  const turnOnly = resolved.filter((s) => /^turns?:/.test(s.urls))
+  turnOnly.sort((a, b) => Number(b.urls.includes(':443')) - Number(a.urls.includes(':443')))
+  const iceServers: IceServer[] = [
     { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
+    ...turnOnly.slice(0, 2),
   ]
-  const turn = await resolveTurnServers()
-  res.json({ iceServers: [...stun, ...turn] })
+  res.json({ iceServers })
 })
 
 // DMs need a persistent identity — guests get 403 with a clear message.

@@ -27,21 +27,46 @@ export function useFileTransfer({ socket, signalEvent, onFileReceived, onAllRece
   const [uploadProgress, setUploadProgress] = useState({})
   const [downloadProgress, setDownloadProgress] = useState({})
 
-  const peersRef = useRef(new Map()) // remote socketId -> {peer, sender?, receiver?}
+  const peersRef = useRef(new Map()) // remote socketId -> {peer, sender?, receiver?, watchdog?}
   const callbacksRef = useRef({ onFileReceived, onAllReceived })
   callbacksRef.current = { onFileReceived, onAllReceived }
+
+  // If a connection doesn't establish within this window, stop waiting and
+  // surface an error instead of spinning forever (failed NAT traversal, a TURN
+  // relay the browser can't use, the other side never answering, etc.).
+  const CONNECT_TIMEOUT_MS = 25_000
+
+  const clearWatchdog = useCallback((peerId) => {
+    const entry = peersRef.current.get(peerId)
+    if (entry?.watchdog) {
+      clearTimeout(entry.watchdog)
+      entry.watchdog = null
+    }
+  }, [])
 
   const teardownPeer = useCallback((peerId) => {
     const entry = peersRef.current.get(peerId)
     if (!entry) return
+    if (entry.watchdog) clearTimeout(entry.watchdog)
     entry.sender?.stop()
     entry.receiver?.stop()
     entry.server?.stop()
     entry.stream?.destroy()
     entry.peer.close()
     peersRef.current.delete(peerId)
-    if (peersRef.current.size === 0) setStatus((s) => (s === 'complete' ? s : 'idle'))
+    // Don't clobber a terminal status — callers set 'error' then tear down.
+    if (peersRef.current.size === 0) setStatus((s) => (s === 'complete' || s === 'error' ? s : 'idle'))
   }, [])
+
+  const armWatchdog = useCallback((peerId) => {
+    const entry = peersRef.current.get(peerId)
+    if (!entry) return
+    entry.watchdog = setTimeout(() => {
+      console.error(`Connection to ${peerId} timed out`)
+      setStatus((s) => (s === 'transferring' || s === 'streaming' || s === 'complete' ? s : 'error'))
+      teardownPeer(peerId)
+    }, CONNECT_TIMEOUT_MS)
+  }, [teardownPeer])
 
   const cancelAll = useCallback(() => {
     for (const peerId of [...peersRef.current.keys()]) teardownPeer(peerId)
@@ -70,7 +95,9 @@ export function useFileTransfer({ socket, signalEvent, onFileReceived, onAllRece
       polite: isPolite(socket.id, peerId),
       iceServers,
       onConnectionState: (state) => {
-        if (state === 'failed' || state === 'closed') {
+        if (state === 'connected') {
+          clearWatchdog(peerId) // established — stop the timeout
+        } else if (state === 'failed' || state === 'closed') {
           setStatus((s) => (s === 'complete' ? s : 'error'))
           teardownPeer(peerId)
         }
@@ -102,7 +129,8 @@ export function useFileTransfer({ socket, signalEvent, onFileReceived, onAllRece
     })
     sender.start()
     peersRef.current.set(peerId, { peer, sender })
-  }, [socket, signalEvent, teardownPeer])
+    armWatchdog(peerId)
+  }, [socket, signalEvent, teardownPeer, armWatchdog])
 
   /** Receiver side: prepare for an inbound dial from `peerId`. */
   const receiveFrom = useCallback(async (peerId, transferId) => {
@@ -131,7 +159,8 @@ export function useFileTransfer({ socket, signalEvent, onFileReceived, onAllRece
       if (entry) entry.receiver = receiver
     }
     peersRef.current.set(peerId, { peer })
-  }, [socket, signalEvent, teardownPeer])
+    armWatchdog(peerId)
+  }, [socket, signalEvent, teardownPeer, armWatchdog])
 
   /** Host side (streaming): answer byte-range requests from a local file. */
   const serveTo = useCallback(async (peerId, file) => {
@@ -140,9 +169,10 @@ export function useFileTransfer({ socket, signalEvent, onFileReceived, onAllRece
     const peer = await buildPeer(peerId)
     const channel = peer.createDataChannel('stream', { ordered: true })
     const server = serveFileOverChannel(channel, file)
-    channel.onopen = () => setStatus('streaming')
+    channel.onopen = () => { clearWatchdog(peerId); setStatus('streaming') }
     peersRef.current.set(peerId, { peer, server })
-  }, [socket, signalEvent, teardownPeer])
+    armWatchdog(peerId)
+  }, [socket, signalEvent, teardownPeer, armWatchdog, clearWatchdog])
 
   /**
    * Receiver side (streaming): await the host's 'stream' channel, bridge it to
@@ -169,7 +199,8 @@ export function useFileTransfer({ socket, signalEvent, onFileReceived, onAllRece
       else channel.onopen = ready
     }
     peersRef.current.set(peerId, { peer })
-  }, [socket, signalEvent, teardownPeer])
+    armWatchdog(peerId)
+  }, [socket, signalEvent, teardownPeer, armWatchdog])
 
   return {
     status,

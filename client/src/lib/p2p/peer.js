@@ -51,6 +51,16 @@ export function createPeer({ sendSignal, polite, iceServers, onConnectionState, 
     onConnectionState?.(pc.connectionState)
   }
 
+  // Firefox surfaces ICE failure through iceConnectionState rather than
+  // connectionState, so watch both — otherwise a failed connection in Firefox
+  // never reports and the UI hangs.
+  pc.oniceconnectionstatechange = () => {
+    if (pc.iceConnectionState === 'failed') onConnectionState?.('failed')
+    else if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+      onConnectionState?.('connected')
+    }
+  }
+
   pc.ondatachannel = ({ channel }) => {
     onDataChannel?.(channel)
   }

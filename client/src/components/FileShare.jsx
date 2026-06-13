@@ -144,6 +144,7 @@ export default function FileShare({ socket }) {
 
   // What the receiver pane should show right now.
   const receiverStatus = receiverPhase === 'error' ? 'error'
+    : status === 'error' ? 'error' // connection failed/timed out — don't spin forever
     : status === 'transferring' ? 'transferring'
     : status === 'complete' ? 'complete'
     : receiverPhase // connecting | ready
@@ -326,12 +327,14 @@ export default function FileShare({ socket }) {
               </div>
             </div>
 
-            {receiverStatus === 'error' && joinError && (
-              <div className="glass-card p-5 border-red-500/20 bg-red-500/5 flex gap-3 items-center">
+            {receiverStatus === 'error' && (
+              <div className="glass-card p-5 border-red-500/20 bg-red-500/5 flex gap-3 items-center" data-testid="fileshare-failed">
                 <AlertCircle className="text-red-500 shrink-0" size={24} />
                 <div>
-                  <p className="text-xs font-bold text-red-500">Connection Failed</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-450 mt-0.5">{joinError}</p>
+                  <p className="text-xs font-bold text-red-500">Connection failed</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-450 mt-0.5">
+                    {joinError || "Couldn't establish a direct connection. The sender may be offline, or the network is too restrictive."}
+                  </p>
                 </div>
               </div>
             )}
