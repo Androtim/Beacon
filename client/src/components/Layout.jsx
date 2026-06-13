@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
 import { useRecentRooms } from '../hooks/useRecentRooms'
-import { Sun, Moon, Gem, Settings, LogOut, Tv, FolderOpen, MessageSquare, PanelLeftClose, PanelLeft, X } from 'lucide-react'
+import { useTransfers } from '../context/TransfersContext'
+import { Sun, Moon, Gem, Settings, LogOut, Tv, FolderOpen, MessageSquare, PanelLeftClose, PanelLeft, X, ArrowUpDown } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 
 const SPACES = [
@@ -28,6 +29,7 @@ export default function Layout({ children }) {
   const location = useLocation()
   const path = location.pathname
   const { rooms, remove } = useRecentRooms()
+  const transfers = useTransfers()
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(RAIL_KEY) === '1')
 
   const toggleCollapsed = () => setCollapsed((c) => {
@@ -131,6 +133,29 @@ export default function Layout({ children }) {
                   )
                 })}
               </div>
+            </>
+          )}
+
+          {/* Active transfer (keeps running in the background) */}
+          {transfers?.active && (
+            <>
+              <div className="my-2 border-t" style={{ borderColor: 'var(--border)' }} />
+              {!collapsed && (
+                <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>Active</p>
+              )}
+              <Link to="/files" className={`nav-item ${path.startsWith('/files') ? 'active' : ''} ${collapsed ? 'justify-center !px-0' : ''}`} title={`${transfers.mode === 'sharing' ? 'Sending' : 'Receiving'} ${transfers.shareCode} · ${transfers.overallPercent}%`} data-testid="rail-transfer">
+                <span className="relative shrink-0">
+                  <ArrowUpDown size={18} style={{ color: 'rgb(var(--accent))' }} className="animate-pulse" />
+                </span>
+                {!collapsed && (
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>
+                      {transfers.mode === 'sharing' ? 'Sending' : 'Receiving'} · {transfers.overallPercent}%
+                    </span>
+                    <span className="block font-mono text-[10px]" style={{ color: 'var(--text-secondary)' }}>{transfers.shareCode}</span>
+                  </span>
+                )}
+              </Link>
             </>
           )}
 
