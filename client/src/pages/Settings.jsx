@@ -6,13 +6,23 @@ import { ArrowLeft, User, Mail, Bell, Moon, Sun, LogOut, ShieldCheck } from 'luc
 import '../index.css';
 
 const Settings = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, rename, isGuest } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [notifications, setNotifications] = useState(true);
+  const [saveStatus, setSaveStatus] = useState(null);
+
+  const handleSaveProfile = async () => {
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === user?.username) return;
+    setSaveStatus('saving');
+    const result = await rename(trimmed);
+    setSaveStatus(result.success ? 'saved' : result.error);
+    if (result.success) setTimeout(() => setSaveStatus(null), 2000);
+  };
 
   useEffect(() => {
     if (user) {
@@ -47,9 +57,10 @@ const Settings = () => {
     return () => clearTimeout(timer);
   }, [theme]);
 
-  const handleSignOut = () => {
-    logout();
-    navigate('/login');
+  // Logging out drops back to a fresh guest identity, so home is the natural place to land.
+  const handleSignOut = async () => {
+    await logout();
+    navigate('/');
   };
 
   return (
@@ -97,19 +108,28 @@ const Settings = () => {
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                     <Mail className="h-4 w-4 text-slate-450 dark:text-slate-500" />
                   </div>
-                  <input 
-                    type="email" 
-                    className="pl-10 input-field" 
-                    value={email} 
-                    onChange={(e) => setEmail(e.target.value)} 
+                  <input
+                    type="email"
+                    className="pl-10 input-field opacity-60"
+                    value={isGuest ? 'Guest session — no email' : email}
+                    disabled
                     placeholder="operator@beacon.sec"
                   />
                 </div>
               </div>
 
-              <button className="btn btn-primary w-full mt-2 h-11 text-xs uppercase tracking-wider">
-                Sync Profile Updates
+              <button onClick={handleSaveProfile} className="btn btn-primary w-full mt-2 h-11 text-xs uppercase tracking-wider" disabled={saveStatus === 'saving'}>
+                {saveStatus === 'saving' ? 'Syncing...' : saveStatus === 'saved' ? 'Saved ✓' : 'Sync Profile Updates'}
               </button>
+              {saveStatus && saveStatus !== 'saving' && saveStatus !== 'saved' && (
+                <p className="text-[10px] text-rose-500 font-bold uppercase tracking-wider text-center">{saveStatus}</p>
+              )}
+              {isGuest && (
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center leading-relaxed">
+                  You're a guest — your name works everywhere, but DMs and persistent history need an account.{' '}
+                  <Link to="/signup" className="text-blue-500 font-bold">Create one</Link> to keep this identity.
+                </p>
+              )}
             </div>
           </section>
 

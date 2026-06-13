@@ -8,6 +8,7 @@ export interface PublicUser {
   id: string
   username: string
   email?: string
+  isGuest?: boolean
   isOnline?: boolean
   lastSeen?: number
   createdAt?: number
@@ -102,6 +103,8 @@ export interface ServerToClientEvents {
   }) => void
   'user-joined': (data: { participants: Participant[]; user: { id: string; username: string } }) => void
   'user-left': (data: { participants: Participant[]; user: { id: string; username: string } }) => void
+  // Presence refresh without a join/leave announcement (e.g. someone reconnected).
+  'participants-updated': (data: { participants: Participant[] }) => void
   'host-changed': (data: { newHost: string }) => void
 
   'video-url-set': (data: { url: string }) => void

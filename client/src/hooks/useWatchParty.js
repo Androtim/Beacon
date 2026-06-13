@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useSocket } from './useSocket'
+import { useSocketContext } from '../context/SocketContext'
 
 export function useWatchParty(roomId, user) {
-  const socket = useSocket()
+  const { socket, connected } = useSocketContext()
   const [participants, setParticipants] = useState([])
   const [isHost, setIsHost] = useState(false)
   const [messages, setMessages] = useState([])
@@ -10,110 +10,95 @@ export function useWatchParty(roomId, user) {
     isPlaying: false,
     currentTime: 0,
     duration: 0,
-    url: null
+    url: null,
   })
   const [fileShare, setFileShare] = useState(null)
 
-  // Clock sync temporarily disabled/local only for Go migration
+  // Clock sync lands in Phase 2; until then events use local time.
   const getSyncedTime = useCallback(() => Date.now(), [])
 
-  // Join room on mount
+  // Join on mount AND on every reconnect: the server treats a rejoin as a
+  // presence refresh and replies with the full room state (resync).
   useEffect(() => {
-    if (!socket || !roomId || !user) {
-      return
-    }
+    if (!socket || !roomId || !user) return
 
-    console.log('🏠 Joining room:', roomId, 'as user:', user.username)
-    socket.emit('join-room', { roomId })
+    const join = () => socket.emit('join-room', { roomId })
+    if (socket.connected) join()
+    socket.on('connect', join)
 
     return () => {
-      console.log('🏠 Leaving room:', roomId)
+      socket.off('connect', join)
       socket.emit('leave-room', { roomId })
     }
   }, [socket, roomId, user])
 
-  // Set up socket event listeners
   useEffect(() => {
     if (!socket) return
 
-    // Room events
-    socket.on('room-joined', (data) => {
-      setParticipants(data.participants)
-      setIsHost(data.isHost)
-      setVideoState(data.videoState)
-      if (data.fileShare) {
-        setFileShare(data.fileShare)
-      }
-    })
-
-    socket.on('user-joined', (data) => {
-      setParticipants(data.participants)
-      setMessages(prev => [...prev, {
-        type: 'system',
-        message: `${data.user.username} joined the party`,
-        timestamp: Date.now()
-      }])
-    })
-
-    socket.on('user-left', (data) => {
-      setParticipants(data.participants)
-      setMessages(prev => [...prev, {
-        type: 'system',
-        message: `${data.user.username} left the party`,
-        timestamp: Date.now()
-      }])
-    })
-
-    // Video sync events
-    socket.on('video-url-set', (data) => {
-      setVideoState(prev => ({ ...prev, url: data.url }))
-    })
-
-    socket.on('video-play', (data) => {
-      // Latency compensation
-      const now = getSyncedTime()
-      const latency = now - data.timestamp
-      const compensatedTime = data.currentTime + (latency / 1000)
-      
-      console.log(`🎬 Received play: latency=${latency}ms, compensatedTime=${compensatedTime}`)
-      setVideoState(prev => ({ 
-        ...prev, 
-        isPlaying: true, 
-        currentTime: compensatedTime 
-      }))
-    })
-
-    socket.on('video-pause', (data) => {
-      setVideoState(prev => ({ ...prev, isPlaying: false, currentTime: data.currentTime }))
-    })
-
-    socket.on('video-seek', (data) => {
-      setVideoState(prev => ({ ...prev, currentTime: data.currentTime }))
-    })
-
-    // Chat events
-    socket.on('chat-message', (data) => {
-      setMessages(prev => [...prev, {
-        type: 'chat',
-        username: data.username,
-        message: data.message,
-        timestamp: data.timestamp
-      }])
-    })
-
-    return () => {
-      socket.off('room-joined')
-      socket.off('user-joined')
-      socket.off('user-left')
-      socket.off('video-url-set')
-      socket.off('video-play')
-      socket.off('video-pause')
-      socket.off('video-seek')
-      socket.off('chat-message')
+    const handlers = {
+      'room-joined': (data) => {
+        setParticipants(data.participants)
+        setIsHost(data.isHost)
+        setVideoState((prev) => ({ ...prev, ...data.videoState }))
+        setFileShare(data.fileShare ?? null)
+      },
+      'user-joined': (data) => {
+        setParticipants(data.participants)
+        setMessages((prev) => [...prev, {
+          type: 'system',
+          message: `${data.user.username} joined the party`,
+          timestamp: Date.now(),
+        }])
+      },
+      'user-left': (data) => {
+        setParticipants(data.participants)
+        setMessages((prev) => [...prev, {
+          type: 'system',
+          message: `${data.user.username} left the party`,
+          timestamp: Date.now(),
+        }])
+      },
+      'participants-updated': (data) => {
+        setParticipants(data.participants)
+      },
+      'host-changed': (data) => {
+        setIsHost(data.newHost === (user?.id))
+        setMessages((prev) => [...prev, {
+          type: 'system',
+          message: 'Host changed',
+          timestamp: Date.now(),
+        }])
+      },
+      'video-url-set': (data) => {
+        setVideoState((prev) => ({ ...prev, url: data.url, isPlaying: false, currentTime: 0 }))
+      },
+      'video-play': (data) => {
+        const latency = Date.now() - data.timestamp
+        const compensatedTime = data.currentTime + latency / 1000
+        setVideoState((prev) => ({ ...prev, isPlaying: true, currentTime: compensatedTime }))
+      },
+      'video-pause': (data) => {
+        setVideoState((prev) => ({ ...prev, isPlaying: false, currentTime: data.currentTime }))
+      },
+      'video-seek': (data) => {
+        setVideoState((prev) => ({ ...prev, currentTime: data.currentTime }))
+      },
+      'chat-message': (data) => {
+        setMessages((prev) => [...prev, {
+          type: 'chat',
+          username: data.username,
+          message: data.message,
+          timestamp: data.timestamp,
+        }])
+      },
     }
-  }, [socket, getSyncedTime])
 
-  // Video control functions
+    for (const [event, handler] of Object.entries(handlers)) socket.on(event, handler)
+    return () => {
+      for (const [event, handler] of Object.entries(handlers)) socket.off(event, handler)
+    }
+  }, [socket, user?.id])
+
   const setVideoUrl = useCallback((url) => {
     if (!socket || !roomId) return
     socket.emit('video-url-set', { roomId, url })
@@ -121,39 +106,22 @@ export function useWatchParty(roomId, user) {
 
   const playVideo = useCallback((currentTime) => {
     if (!socket || !roomId) return
-    socket.emit('video-play', { 
-      roomId, 
-      currentTime, 
-      timestamp: getSyncedTime() 
-    })
+    socket.emit('video-play', { roomId, currentTime, timestamp: getSyncedTime() })
   }, [socket, roomId, getSyncedTime])
 
   const pauseVideo = useCallback((currentTime) => {
     if (!socket || !roomId) return
-    socket.emit('video-pause', { 
-      roomId, 
-      currentTime, 
-      timestamp: getSyncedTime() 
-    })
+    socket.emit('video-pause', { roomId, currentTime, timestamp: getSyncedTime() })
   }, [socket, roomId, getSyncedTime])
 
   const seekVideo = useCallback((currentTime) => {
     if (!socket || !roomId) return
-    socket.emit('video-seek', { 
-      roomId, 
-      currentTime, 
-      timestamp: getSyncedTime() 
-    })
+    socket.emit('video-seek', { roomId, currentTime, timestamp: getSyncedTime() })
   }, [socket, roomId, getSyncedTime])
 
   const sendMessage = useCallback((message) => {
     if (!socket || !roomId || !user) return
-    socket.emit('chat-message', {
-      roomId,
-      username: user.username,
-      message,
-      timestamp: Date.now()
-    })
+    socket.emit('chat-message', { roomId, message, timestamp: Date.now() })
   }, [socket, roomId, user])
 
   return {
@@ -167,7 +135,7 @@ export function useWatchParty(roomId, user) {
     pauseVideo,
     seekVideo,
     sendMessage,
-    connected: socket?.connectionStatus || false,
-    socket 
+    connected,
+    socket,
   }
 }

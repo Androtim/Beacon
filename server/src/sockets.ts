@@ -1,41 +1,42 @@
 import { Server, type Socket } from 'socket.io'
 import type { Server as HttpServer } from 'http'
-import type {
-  ClientToServerEvents, ServerToClientEvents,
-  Participant, VideoState, RoomFileShare, FileInfo,
-} from '../../shared/protocol.js'
-import { findUserById, createMessage } from './db.js'
+import type { z } from 'zod'
+import type { ServerToClientEvents, RoomFileShare, FileInfo } from '../../shared/protocol.js'
+import { findUserById, createMessage, getRoom } from './db.js'
 import { verifyToken } from './middleware.js'
+import { schemas, type SchemaMap } from './validation.js'
+import * as rooms from './rooms.js'
 
-interface SocketData {
-  user: { id: string; username: string }
+interface SocketUser {
+  id: string
+  username: string
+  isGuest: boolean
 }
 
-type BeaconSocket = Socket<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>
-
-interface Room {
-  participants: Participant[]
-  host: string
-  videoState: VideoState
-  fileShare: RoomFileShare | null
-}
+type BeaconServer = Server<Record<string, never>, ServerToClientEvents>
+type BeaconSocket = Socket<Record<string, never>, ServerToClientEvents> & { data: { user: SocketUser } }
 
 interface FileShareSession {
-  hostId: string
+  hostSocketId: string
   files: FileInfo[]
   expiresAt: number
   participants: Set<string>
 }
 
-// NOTE: rooms/file shares are in-memory for now; Phase 1 moves room state to
-// SQLite so sessions survive server restarts.
-const rooms = new Map<string, Room>()
+// Ephemeral by nature (they reference live sockets / in-browser blobs).
 const fileShares = new Map<string, FileShareSession>()
+const roomFileShares = new Map<string, RoomFileShare>()
 const onlineUsers = new Map<string, { socketId: string; username: string }>()
 
-export default function initSocket(server: HttpServer) {
-  const io = new Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>(server, {
-    cors: { origin: true, methods: ['GET', 'POST'], credentials: true },
+const FILE_SHARE_TTL_MS = 30 * 60 * 1000
+
+export default function initSocket(server: HttpServer, allowOrigin: (origin: string | undefined) => boolean) {
+  const io: BeaconServer = new Server(server, {
+    cors: {
+      origin: (origin, cb) => cb(null, allowOrigin(origin ?? undefined)),
+      methods: ['GET', 'POST'],
+      credentials: true,
+    },
     transports: ['polling', 'websocket'],
     pingTimeout: 120000,
     pingInterval: 30000,
@@ -49,94 +50,101 @@ export default function initSocket(server: HttpServer) {
       const decoded = verifyToken(token)
       const user = findUserById(decoded.userId)
       if (!user) return next(new Error('User not found'))
-      socket.data.user = { id: user.id, username: user.username }
+      socket.data.user = { id: user.id, username: user.username, isGuest: !!user.is_guest } satisfies SocketUser
       next()
     } catch {
       next(new Error('Invalid token'))
     }
   })
 
-  io.on('connection', (socket: BeaconSocket) => {
-    const { id: userId, username } = socket.data.user
+  io.on('connection', (rawSocket) => {
+    const socket = rawSocket as BeaconSocket
+    const { id: userId, username, isGuest } = socket.data.user
     onlineUsers.set(userId, { socketId: socket.id, username })
     io.emit('user-online', { id: userId, username })
 
-    socket.on('join-room', ({ roomId }) => {
-      if (typeof roomId !== 'string' || !roomId) return
-      socket.join(roomId)
-      let room = rooms.get(roomId)
-      if (!room) {
-        room = {
-          participants: [],
-          host: userId,
-          videoState: { isPlaying: false, currentTime: 0, url: null },
-          fileShare: null,
+    /** Register a handler whose payload is validated against its zod schema first. */
+    function on<E extends keyof SchemaMap>(event: E, handler: (data: z.infer<SchemaMap[E]>) => void) {
+      socket.on(event as string, (raw: unknown) => {
+        const parsed = schemas[event].safeParse(raw)
+        if (!parsed.success) return
+        try {
+          handler(parsed.data as z.infer<SchemaMap[E]>)
+        } catch (e) {
+          console.error(`Handler error for ${String(event)}:`, e)
         }
-        rooms.set(roomId, room)
-      }
-      const existing = room.participants.find((p) => p.id === userId)
-      if (existing) existing.socketId = socket.id
-      else room.participants.push({ id: userId, username, socketId: socket.id })
-
-      socket.emit('room-joined', {
-        participants: room.participants,
-        isHost: userId === room.host,
-        videoState: room.videoState,
-        fileShare: room.fileShare,
       })
-      socket.to(roomId).emit('user-joined', { participants: room.participants, user: { id: userId, username } })
-    })
+    }
 
-    socket.on('get-server-time', (cb) => {
+    socket.on('get-server-time', (cb: unknown) => {
       if (typeof cb === 'function') cb(Date.now())
     })
 
-    socket.on('video-url-set', ({ roomId, url }) => {
-      const room = rooms.get(roomId)
-      if (!room || typeof url !== 'string') return
-      room.videoState.url = url
-      io.to(roomId).emit('video-url-set', { url })
+    // ---- Rooms ----
+
+    on('join-room', ({ roomId }) => {
+      socket.join(roomId)
+      const result = rooms.joinRoom(roomId, { id: userId, username }, socket.id)
+      socket.emit('room-joined', {
+        participants: result.participants,
+        isHost: result.isHost,
+        videoState: result.videoState,
+        fileShare: roomFileShares.get(roomId) ?? null,
+      })
+      if (result.rejoined) {
+        socket.to(roomId).emit('participants-updated', { participants: result.participants })
+      } else {
+        socket.to(roomId).emit('user-joined', { participants: result.participants, user: { id: userId, username } })
+      }
     })
 
-    socket.on('video-play', ({ roomId, currentTime }) => {
-      const room = rooms.get(roomId)
-      if (!room || typeof currentTime !== 'number') return
-      room.videoState.isPlaying = true
-      room.videoState.currentTime = currentTime
-      io.to(roomId).emit('video-play', { currentTime, timestamp: Date.now() })
-    })
-
-    socket.on('video-pause', ({ roomId, currentTime }) => {
-      const room = rooms.get(roomId)
-      if (!room || typeof currentTime !== 'number') return
-      room.videoState.isPlaying = false
-      room.videoState.currentTime = currentTime
-      io.to(roomId).emit('video-pause', { currentTime })
-    })
-
-    socket.on('video-seek', ({ roomId, currentTime }) => {
-      const room = rooms.get(roomId)
-      if (!room || typeof currentTime !== 'number') return
-      room.videoState.currentTime = currentTime
-      io.to(roomId).emit('video-seek', { currentTime })
-    })
-
-    socket.on('chat-message', ({ roomId, message, timestamp }) => {
-      if (typeof message !== 'string' || !rooms.has(roomId)) return
-      // Username comes from the authenticated socket, never from the payload.
-      io.to(roomId).emit('chat-message', { username, message, timestamp })
-    })
-
-    socket.on('leave-room', ({ roomId }) => {
-      if (!roomId) return
+    on('leave-room', ({ roomId }) => {
       socket.leave(roomId)
-      removeFromRoom(roomId, userId)
+      const result = rooms.leaveRoom(roomId, userId)
+      if (!result) return
+      io.to(roomId).emit('user-left', { participants: result.participants, user: { id: userId, username } })
+      if (result.newHostId) io.to(roomId).emit('host-changed', { newHost: result.newHostId })
     })
 
-    socket.on('private-message', ({ to, message, timestamp }) => {
-      if (typeof to !== 'string' || typeof message !== 'string') return
+    // ---- Video state (host-controlled) ----
+
+    on('video-url-set', ({ roomId, url }) => {
+      if (!rooms.isHost(roomId, userId)) return
+      const state = rooms.updateVideoState(roomId, { url, isPlaying: false, currentTime: 0 })
+      if (state) io.to(roomId).emit('video-url-set', { url })
+    })
+
+    on('video-play', ({ roomId, currentTime }) => {
+      if (!rooms.isHost(roomId, userId)) return
+      const state = rooms.updateVideoState(roomId, { isPlaying: true, currentTime })
+      if (state) io.to(roomId).emit('video-play', { currentTime, timestamp: Date.now() })
+    })
+
+    on('video-pause', ({ roomId, currentTime }) => {
+      if (!rooms.isHost(roomId, userId)) return
+      const state = rooms.updateVideoState(roomId, { isPlaying: false, currentTime })
+      if (state) io.to(roomId).emit('video-pause', { currentTime })
+    })
+
+    on('video-seek', ({ roomId, currentTime }) => {
+      if (!rooms.isHost(roomId, userId)) return
+      const state = rooms.updateVideoState(roomId, { currentTime })
+      if (state) io.to(roomId).emit('video-seek', { currentTime })
+    })
+
+    // ---- Chat ----
+
+    on('chat-message', ({ roomId, message }) => {
+      if (!rooms.liveParticipant(roomId, userId)) return
+      // Identity comes from the authenticated socket, never from the payload.
+      io.to(roomId).emit('chat-message', { username, message, timestamp: Date.now() })
+    })
+
+    on('private-message', ({ to, message, timestamp }) => {
+      if (isGuest) return // DMs need a persistent identity
+      const recipient = findUserById(to)
+      if (!recipient || recipient.is_guest) return
       const ts = typeof timestamp === 'number' ? timestamp : Date.now()
-      if (!findUserById(to)) return
       try {
         createMessage(userId, to, message, ts)
       } catch (e) {
@@ -146,99 +154,115 @@ export default function initSocket(server: HttpServer) {
       if (rec) io.to(rec.socketId).emit('private-message', { from: { id: userId, username }, message, timestamp: ts })
     })
 
-    // ---- Generic P2P file share (8-char codes) ----
-    socket.on('file-share-create', ({ code, files }) => {
-      if (typeof code !== 'string' || !Array.isArray(files)) return
-      fileShares.set(code, { hostId: socket.id, files, expiresAt: Date.now() + 1800000, participants: new Set([socket.id]) })
+    // ---- Generic P2P file share (share codes) ----
+
+    on('file-share-create', ({ code, files }) => {
+      const existing = fileShares.get(code)
+      if (existing && existing.hostSocketId !== socket.id && existing.expiresAt > Date.now()) return
+      fileShares.set(code, {
+        hostSocketId: socket.id,
+        files,
+        expiresAt: Date.now() + FILE_SHARE_TTL_MS,
+        participants: new Set([socket.id]),
+      })
     })
 
-    socket.on('file-share-join', ({ code }) => {
+    on('file-share-join', ({ code }) => {
       const share = fileShares.get(code)
       if (share && share.expiresAt > Date.now()) {
         share.participants.add(socket.id)
-        socket.emit('file-share-info', { files: share.files, hostId: share.hostId, code })
+        socket.emit('file-share-info', { files: share.files, hostId: share.hostSocketId, code })
       } else {
         socket.emit('file-share-error', { message: 'Expired or invalid code' })
       }
     })
 
-    socket.on('file-share-request', ({ to }) => { io.to(to).emit('file-share-request', { from: socket.id }) })
-    socket.on('file-share-ready', ({ to, fileInfo }) => { io.to(to).emit('file-share-ready', { from: socket.id, fileInfo }) })
-
-    socket.on('file-share-signal', ({ to, signal }) => {
-      for (const share of fileShares.values()) {
-        if (share.participants.has(socket.id) && share.participants.has(to)) {
-          io.to(to).emit('file-share-signal', { from: socket.id, signal })
-          return
-        }
-      }
+    on('file-share-request', ({ to }) => {
+      if (!sharesWith(socket.id, to)) return
+      io.to(to).emit('file-share-request', { from: socket.id })
     })
 
-    socket.on('file-share-cancel', ({ code }) => {
+    on('file-share-ready', ({ to, fileInfo }) => {
+      if (!sharesWith(socket.id, to)) return
+      io.to(to).emit('file-share-ready', { from: socket.id, fileInfo: fileInfo as FileInfo[] | null })
+    })
+
+    on('file-share-signal', ({ to, signal }) => {
+      if (!sharesWith(socket.id, to)) return
+      io.to(to).emit('file-share-signal', { from: socket.id, signal })
+    })
+
+    on('file-share-cancel', ({ code }) => {
       const share = fileShares.get(code)
-      if (share?.hostId === socket.id) fileShares.delete(code)
+      if (share?.hostSocketId === socket.id) fileShares.delete(code)
     })
 
     // ---- Watch party video file share ----
-    socket.on('video-file-share', ({ roomId, fileInfo }) => {
-      const room = rooms.get(roomId)
-      if (!room) return
-      room.fileShare = { fileInfo, hostId: socket.id }
+
+    on('video-file-share', ({ roomId, fileInfo }) => {
+      if (!rooms.isHost(roomId, userId) || !getRoom(roomId)) return
+      roomFileShares.set(roomId, { fileInfo, hostId: socket.id })
       socket.to(roomId).emit('video-file-info', { fileInfo, hostId: socket.id })
     })
 
-    socket.on('video-file-request', ({ to }) => { io.to(to).emit('video-file-request', { from: socket.id }) })
-    socket.on('video-file-ready', ({ to, fileInfo }) => { io.to(to).emit('video-file-ready', { from: socket.id, fileInfo }) })
-
-    socket.on('video-file-signal', ({ to, signal }) => {
-      for (const room of rooms.values()) {
-        const sender = room.participants.some((p) => p.socketId === socket.id)
-        const receiver = room.participants.some((p) => p.socketId === to)
-        if (sender && receiver) {
-          io.to(to).emit('video-file-signal', { from: socket.id, signal })
-          return
-        }
-      }
+    on('video-file-request', ({ to }) => {
+      if (!rooms.inSameRoom(socket.id, to)) return
+      io.to(to).emit('video-file-request', { from: socket.id })
     })
 
-    socket.on('video-file-cancel', ({ roomId }) => {
-      const room = rooms.get(roomId)
-      if (!room) return
-      room.fileShare = null
+    on('video-file-ready', ({ to, fileInfo }) => {
+      if (!rooms.inSameRoom(socket.id, to)) return
+      io.to(to).emit('video-file-ready', { from: socket.id, fileInfo: fileInfo ?? null })
+    })
+
+    on('video-file-signal', ({ to, signal }) => {
+      if (!rooms.inSameRoom(socket.id, to)) return
+      io.to(to).emit('video-file-signal', { from: socket.id, signal })
+    })
+
+    on('video-file-cancel', ({ roomId }) => {
+      const share = roomFileShares.get(roomId)
+      if (!share || share.hostId !== socket.id) return
+      roomFileShares.delete(roomId)
       socket.to(roomId).emit('video-file-cancel')
     })
 
+    // ---- Disconnect ----
+
     socket.on('disconnect', () => {
-      onlineUsers.delete(userId)
-      io.emit('user-offline', userId)
-      for (const [roomId, room] of rooms) {
-        if (room.participants.some((p) => p.id === userId)) {
-          removeFromRoom(roomId, userId)
-        }
+      if (onlineUsers.get(userId)?.socketId === socket.id) {
+        onlineUsers.delete(userId)
+        io.emit('user-offline', userId)
+      }
+      rooms.handleDisconnect(
+        userId,
+        socket.id,
+        (roomId, participants) => {
+          io.to(roomId).emit('user-left', { participants, user: { id: userId, username } })
+          const share = roomFileShares.get(roomId)
+          if (share?.hostId === socket.id) {
+            roomFileShares.delete(roomId)
+            io.to(roomId).emit('video-file-cancel')
+          }
+        },
+        (roomId, newHostId) => {
+          io.to(roomId).emit('host-changed', { newHost: newHostId })
+        },
+      )
+      for (const [code, share] of fileShares) {
+        if (share.hostSocketId === socket.id) fileShares.delete(code)
+        else share.participants.delete(socket.id)
       }
     })
-
-    function removeFromRoom(roomId: string, leavingUserId: string) {
-      const room = rooms.get(roomId)
-      if (!room) return
-      const leaving = room.participants.find((p) => p.id === leavingUserId)
-      room.participants = room.participants.filter((p) => p.id !== leavingUserId)
-
-      if (room.participants.length === 0) {
-        rooms.delete(roomId)
-        return
-      }
-      if (room.host === leavingUserId) {
-        room.host = room.participants[0].id
-        room.fileShare = null
-        io.to(roomId).emit('host-changed', { newHost: room.host })
-      }
-      io.to(roomId).emit('user-left', {
-        participants: room.participants,
-        user: { id: leavingUserId, username: leaving?.username ?? 'unknown' },
-      })
-    }
   })
 
+  function sharesWith(a: string, b: string): boolean {
+    for (const share of fileShares.values()) {
+      if (share.expiresAt > Date.now() && share.participants.has(a) && share.participants.has(b)) return true
+    }
+    return false
+  }
+
+  rooms.startRoomCleanup()
   return io
 }

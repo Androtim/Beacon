@@ -3,12 +3,20 @@ import axios from 'axios'
 
 const AuthContext = createContext()
 
-// Set axios defaults
-const isProd = import.meta.env.PROD
-axios.defaults.baseURL = isProd 
-  ? `${window.location.protocol}//${window.location.hostname}:3001`
-  : window.location.origin
+// Same-origin in dev (Vite proxies /api); production serves client and API
+// from the same origin.
+axios.defaults.baseURL = window.location.origin
 axios.defaults.withCredentials = true
+
+function applyToken(token) {
+  if (token) {
+    localStorage.setItem('token', token)
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+  } else {
+    localStorage.removeItem('token')
+    delete axios.defaults.headers.common['Authorization']
+  }
+}
 
 export function useAuth() {
   const context = useContext(AuthContext)
@@ -22,81 +30,95 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  // Guest-first bootstrap: with no (or an invalid) token, silently create a
+  // guest identity so anyone can join or host from just a link.
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
-      fetchUser()
-    } else {
-      setLoading(false)
+    const bootstrap = async () => {
+      const token = localStorage.getItem('token')
+      if (token) {
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+        try {
+          const response = await axios.get('/api/auth/me')
+          setUser(response.data.user)
+          setLoading(false)
+          return
+        } catch {
+          applyToken(null)
+        }
+      }
+      try {
+        const response = await axios.post('/api/auth/guest', {})
+        applyToken(response.data.token)
+        setUser(response.data.user)
+      } catch (error) {
+        console.error('Failed to create guest session:', error)
+      } finally {
+        setLoading(false)
+      }
     }
+    bootstrap()
   }, [])
-
-  const fetchUser = async () => {
-    try {
-      const response = await axios.get('/api/auth/me')
-      setUser(response.data.user)
-    } catch (error) {
-      console.error('Failed to fetch user:', error)
-      localStorage.removeItem('token')
-      delete axios.defaults.headers.common['Authorization']
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const login = async (email, password) => {
     try {
       const response = await axios.post('/api/auth/login', { email, password })
-      const { token, user } = response.data
-      
-      localStorage.setItem('token', token)
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
-      setUser(user)
-      
+      applyToken(response.data.token)
+      setUser(response.data.user)
       return { success: true }
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Login failed' 
-      }
+      return { success: false, error: error.response?.data?.message || 'Login failed' }
     }
   }
 
+  // If the current identity is a guest, the server upgrades it in place
+  // (same id, party/DM history kept).
   const signup = async (username, email, password) => {
     try {
-      const response = await axios.post('/api/auth/signup', { 
-        username, 
-        email, 
-        password 
-      })
-      const { token, user } = response.data
-      
-      localStorage.setItem('token', token)
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
-      setUser(user)
-      
+      const response = await axios.post('/api/auth/signup', { username, email, password })
+      applyToken(response.data.token)
+      setUser(response.data.user)
       return { success: true }
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Signup failed' 
-      }
+      return { success: false, error: error.response?.data?.message || 'Signup failed' }
     }
   }
 
-  const logout = () => {
-    localStorage.removeItem('token')
-    delete axios.defaults.headers.common['Authorization']
-    setUser(null)
+  const rename = async (username) => {
+    try {
+      const response = await axios.post('/api/auth/rename', { username })
+      applyToken(response.data.token)
+      setUser(response.data.user)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error.response?.data?.message || 'Rename failed' }
+    }
+  }
+
+  // Logging out of an account drops back to a fresh guest identity.
+  const logout = async () => {
+    try {
+      await axios.post('/api/auth/logout')
+    } catch {
+      // best effort
+    }
+    applyToken(null)
+    try {
+      const response = await axios.post('/api/auth/guest', {})
+      applyToken(response.data.token)
+      setUser(response.data.user)
+    } catch {
+      setUser(null)
+    }
   }
 
   const value = {
     user,
+    isGuest: !!user?.isGuest,
     login,
     signup,
+    rename,
     logout,
-    loading
+    loading,
   }
 
   if (loading) {

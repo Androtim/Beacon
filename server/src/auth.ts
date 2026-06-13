@@ -1,37 +1,59 @@
 import { Router } from 'express'
 import {
-  createUser, findUserByEmail, findUserByUsername,
+  createUser, createGuest, upgradeGuestToAccount, updateUsername,
+  findUserByEmail, findUserByUsername,
   verifyPassword, setUserOnline, toPublicUser,
 } from './db.js'
-import { authenticateToken, signToken } from './middleware.js'
+import { authenticateToken, optionalToken, signToken } from './middleware.js'
 
 const router = Router()
 
-router.post('/signup', (req, res) => {
+const USERNAME_RE = /^[\w][\w .-]{1,18}[\w]$/
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function validUsername(name: unknown): name is string {
+  return typeof name === 'string' && USERNAME_RE.test(name.trim())
+}
+
+/** Anonymous identity: anyone can join/host with zero setup. */
+router.post('/guest', (req, res) => {
+  const { username } = req.body ?? {}
+  if (username !== undefined && !validUsername(username)) {
+    return res.status(400).json({ message: 'Username must be 3-20 characters (letters, numbers, spaces, ._-)' })
+  }
+  if (username && findUserByUsername(username)) {
+    return res.status(400).json({ message: 'This username is already taken' })
+  }
+  const user = createGuest(username)
+  const token = signToken({ userId: user.id, username: user.username })
+  res.status(201).json({ message: 'Guest session created', token, user: toPublicUser(user) })
+})
+
+/** Signup. If called with a valid guest token, upgrades that guest in place (keeps id/history). */
+router.post('/signup', optionalToken, (req, res) => {
   const { username, email, password } = req.body ?? {}
 
-  if (typeof username !== 'string' || typeof email !== 'string' || typeof password !== 'string') {
-    return res.status(400).json({ message: 'All fields are required' })
+  if (!validUsername(username)) {
+    return res.status(400).json({ message: 'Username must be 3-20 characters (letters, numbers, spaces, ._-)' })
   }
-  const name = username.trim()
-  if (name.length < 3 || name.length > 20) {
-    return res.status(400).json({ message: 'Username must be 3-20 characters' })
-  }
-  if (password.length < 6) {
-    return res.status(400).json({ message: 'Password must be at least 6 characters' })
-  }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+  if (typeof email !== 'string' || !EMAIL_RE.test(email.trim())) {
     return res.status(400).json({ message: 'A valid email is required' })
   }
-
+  if (typeof password !== 'string' || password.length < 6) {
+    return res.status(400).json({ message: 'Password must be at least 6 characters' })
+  }
   if (findUserByEmail(email)) {
     return res.status(400).json({ message: 'This email is already taken' })
   }
-  if (findUserByUsername(name)) {
+  const nameOwner = findUserByUsername(username)
+  if (nameOwner && nameOwner.id !== req.user?.id) {
     return res.status(400).json({ message: 'This username is already taken' })
   }
 
-  const user = createUser(name, email, password)
+  const user = req.user?.is_guest
+    ? upgradeGuestToAccount(req.user.id, username, email, password)
+    : createUser(username, email, password)
+
   const token = signToken({ userId: user.id, username: user.username })
   res.status(201).json({ message: 'Account created successfully', token, user: toPublicUser(user) })
 })
@@ -50,6 +72,20 @@ router.post('/login', (req, res) => {
   setUserOnline(user.id, true)
   const token = signToken({ userId: user.id, username: user.username })
   res.json({ message: 'Login successful', token, user: toPublicUser(user) })
+})
+
+router.post('/rename', authenticateToken, (req, res) => {
+  const { username } = req.body ?? {}
+  if (!validUsername(username)) {
+    return res.status(400).json({ message: 'Username must be 3-20 characters (letters, numbers, spaces, ._-)' })
+  }
+  const owner = findUserByUsername(username)
+  if (owner && owner.id !== req.user!.id) {
+    return res.status(400).json({ message: 'This username is already taken' })
+  }
+  const user = updateUsername(req.user!.id, username)
+  const token = signToken({ userId: user.id, username: user.username })
+  res.json({ message: 'Username updated', token, user: toPublicUser(user) })
 })
 
 router.get('/me', authenticateToken, (req, res) => {
