@@ -31,6 +31,8 @@ export const schemas = {
   'video-play': z.object({ roomId, currentTime: z.number().finite(), timestamp: z.number().optional() }),
   'video-pause': z.object({ roomId, currentTime: z.number().finite(), timestamp: z.number().optional() }),
   'video-seek': z.object({ roomId, currentTime: z.number().finite(), timestamp: z.number().optional() }),
+  'stream-request': z.object({ roomId, url: z.string().min(1).max(4096) }),
+  'stream-respond': z.object({ roomId, requestId: z.string().min(1).max(64), approve: z.boolean() }),
   'chat-message': z.object({
     roomId,
     message: z.string().min(1).max(2000),

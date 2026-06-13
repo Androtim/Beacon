@@ -13,9 +13,11 @@ export default function WatchParty() {
   const {
     participants, isHost, messages, playback, serverNow,
     setVideoUrl, playVideo, pauseVideo, seekVideo, sendMessage, connected, socket, fileShare,
+    streamRequests, myRequest, requestStream, respondStream, clearMyRequest,
   } = useWatchParty(roomId, user)
 
   const [urlInput, setUrlInput] = useState('')
+  const [suggestInput, setSuggestInput] = useState('')
   const [chatInput, setChatInput] = useState('')
   const [hostVideoSource, setHostVideoSource] = useState('url') // 'url' | 'file'
   const [localFileUrl, setLocalFileUrl] = useState(null)
@@ -38,6 +40,10 @@ export default function WatchParty() {
   const handleLocalVideoReady = (url) => {
     setLocalFileUrl(url)
     if (isHost) setVideoUrl(url)
+  }
+  const handleSuggest = (e) => {
+    e.preventDefault()
+    if (suggestInput.trim()) { requestStream(suggestInput.trim()); setSuggestInput('') }
   }
   const copyCode = () => {
     navigator.clipboard?.writeText(roomId).catch(() => {})
@@ -125,9 +131,54 @@ export default function WatchParty() {
 
           {videoPane}
 
-          {/* Participant file-share pane */}
+          {/* Host: pending suggestions to approve */}
+          {isHost && streamRequests.length > 0 && (
+            <div className="glass-card p-4 space-y-2" data-testid="stream-requests">
+              {streamRequests.map((req) => (
+                <div key={req.requestId} className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+                      <span style={{ color: 'rgb(var(--accent))' }}>{req.from.username}</span> wants to play
+                    </p>
+                    <p className="text-[11px] truncate" style={{ color: 'var(--text-secondary)' }}>{req.url}</p>
+                  </div>
+                  <button onClick={() => respondStream(req.requestId, true)} className="btn btn-primary h-9 px-4 text-[11px]" data-testid="approve-request">Approve</button>
+                  <button onClick={() => respondStream(req.requestId, false)} className="btn btn-secondary h-9 px-4 text-[11px]">Deny</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Participant: suggest a video + receive a shared file */}
           {!isHost && (
-            <VideoFileSharing socket={socket} roomId={roomId} isHost={false} onVideoReady={handleLocalVideoReady} initialFileShare={fileShare} />
+            <div className="space-y-5">
+              <div className="glass-card p-5 space-y-3">
+                <h3 className="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                  <Link2 size={15} style={{ color: 'rgb(var(--accent))' }} /> Suggest something to watch
+                </h3>
+                {myRequest?.status === 'pending' ? (
+                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }} data-testid="suggest-pending">Waiting for the host to approve…</p>
+                ) : myRequest?.status === 'denied' ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs text-rose-400" data-testid="suggest-denied">The host passed on that one.</p>
+                    <button onClick={clearMyRequest} className="btn btn-secondary h-8 px-3 text-[10px]">OK</button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSuggest} className="flex gap-2.5">
+                    <input
+                      type="text"
+                      className="input-field flex-1"
+                      placeholder="Paste a video link or YouTube URL…"
+                      value={suggestInput}
+                      onChange={(e) => setSuggestInput(e.target.value)}
+                      data-testid="suggest-input"
+                    />
+                    <button type="submit" className="btn btn-primary px-5" data-testid="suggest-submit">Suggest</button>
+                  </form>
+                )}
+              </div>
+              <VideoFileSharing socket={socket} roomId={roomId} isHost={false} onVideoReady={handleLocalVideoReady} initialFileShare={fileShare} />
+            </div>
           )}
 
           {/* Host controls */}
