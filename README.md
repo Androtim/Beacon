@@ -1,67 +1,95 @@
-# Beacon V2 - Synchronized P2P Experience 📡
+# Beacon — Synchronized Watch Parties & P2P File Sharing 📡
 
-Beacon is a high-performance, decentralized web platform designed for synchronized media viewing and secure peer-to-peer file sharing. By leveraging WebRTC and Socket.io, Beacon eliminates the need for middleman servers, ensuring your data moves directly between devices with zero latency and maximum privacy.
+Beacon lets people watch videos in perfect sync and share files directly
+between browsers. It's web-first and private by architecture: the server only
+introduces peers and relays signaling — video, file bytes, voice, and room
+chat all flow peer-to-peer over WebRTC (DTLS-encrypted), and direct messages
+are end-to-end encrypted. No account is needed to join.
 
-![Status](https://img.shields.io/badge/Status-V2_Beta-violet)
-![Encryption](https://img.shields.io/badge/Security-P2P_Encrypted-cyan)
-![Interface](https://img.shields.io/badge/UI-Mobile_Optimized-green)
+![Status](https://img.shields.io/badge/Status-Core_Complete-violet)
+![Tests](https://img.shields.io/badge/Tests-30_passing-green)
+![Security](https://img.shields.io/badge/DMs-E2E_Encrypted-cyan)
 
-## ✨ Core Protocols
+## ✨ Features
 
-### 🎬 Perfect-Sync Watch Parties
-*   **Latecomer Synchronization**: New participants joining an active session automatically receive the current media state and file metadata, jumping into perfect sync with the group instantly.
-*   **Multi-Source Engine**: Support for direct video links (.mp4, .webm), HLS streams, and local P2P shared files.
-*   **Host Privileges**: Room creators maintain master control over playback, seeking, and source coordinates.
-*   **Real-time Comms**: Integrated encrypted chat for coordinated viewing.
+### 🎬 Synchronized watch parties
+*   **Authoritative sync** — the server owns playback state; every client steers
+    toward it with clock-offset estimation and continuous drift correction
+    (invisible rate nudges, hard-seek only for large gaps). Late joiners land
+    mid-playback in sync.
+*   **Multi-source** — direct video links (.mp4/.webm/.mov), YouTube (synced via
+    the official IFrame Player API), and local files shared peer-to-peer.
+*   **Stream-while-downloading** — when a host shares a local file, participants
+    start watching within seconds (a service worker pulls byte ranges from the
+    host on demand) instead of waiting for a full transfer.
+*   **Voice chat** — opt-in P2P mesh voice with mute/leave.
+*   **Live chat** — real-time room chat with server-authenticated identities.
 
-### 📁 Direct-Link File Sharing
-*   **Pure P2P Transfer**: Files are streamed directly from browser-to-browser. No server storage, no limits (up to 3GB per object).
-*   **8-Digit Intercept Codes**: Simple alphanumeric coordinates for secure, one-to-one transfers.
-*   **Progressive Synchronization**: Real-time telemetry for upload and download states across all peers.
+### 📁 P2P file sharing
+*   **Pure P2P transfer** — files stream directly browser-to-browser; the server
+    stores nothing.
+*   **Resumable** — transfers survive disconnects and page reloads, continuing
+    from the last byte on disk (received data is written to OPFS, not held in
+    RAM, so large files don't exhaust memory).
+*   **Share codes** — 8-character codes for one-to-many transfers; multiple files
+    arrive as a zip.
 
-### 📱 Mobile-First Architecture
-*   **Responsive Scaling**: Overhauled UI using `dvh` units to handle mobile browser address bars and notched displays.
-*   **Glassmorphism Design**: A premium, dark-mode aesthetic built for modern high-refresh-rate screens.
+### 🔐 Accounts & privacy
+*   **Guest-first** — anyone can join or host from a link with an
+    auto-generated identity; accounts are optional.
+*   **End-to-end encrypted DMs** — ECDH P-256 + AES-GCM via WebCrypto; the
+    server stores only ciphertext envelopes it cannot read.
 
-## 🛠 Tech Stack
+## 🛠 Tech stack
 
-*   **Frontend**: React 18, Vite, Framer Motion, Tailwind CSS, Lucide Icons.
-*   **Networking**: WebRTC (Simple-Peer), Socket.io-client.
-*   **Backend**: Node.js, Express, Socket.io, JWT Authentication.
-*   **Database**: MongoDB (Production) with In-Memory fallback (Development).
+*   **Frontend**: React 18, Vite, Tailwind CSS, Framer Motion, Lucide icons
+*   **Networking**: native WebRTC (perfect negotiation), Socket.io
+*   **Backend**: Node.js, Express, Socket.io (TypeScript, run via tsx)
+*   **Database**: SQLite (better-sqlite3)
+*   **Shared**: typed client/server protocol in `shared/`
+*   **Tests**: Playwright (`npm run test:e2e`)
 
-## 🚀 Deployment Coordinates
+## 🚀 Quick start
 
-### Prerequisites
-*   **Node.js**: v18 or higher
-*   **Public Access**: For remote testing (e.g., on a phone), use a tunnel like Cloudflare or Localtunnel.
+```bash
+git clone https://github.com/Androtim/Beacon.git
+cd Beacon
+npm run install-all
 
-### Quick Start
-1.  **Clone the Protocol:**
-    ```bash
-    git clone https://github.com/Androtim/Beacon.git
-    cd Beacon
-    ```
-2.  **Initialize Environment:**
-    ```bash
-    # Set up server environment
-    cd server
-    echo "JWT_SECRET=your_secure_secret" > .env
-    ```
-3.  **Launch Ecosystem:**
-    ```bash
-    # From the root directory
-    npm run install-all
-    npm run dev
-    ```
+# Server needs a JWT secret to start
+cd server && echo "JWT_SECRET=replace-with-a-long-random-string" > .env && cd ..
 
-## 📋 API Overview
+npm run dev   # client on :3000, server on :3001
+```
 
-*   `POST /api/auth/register` - Initialize new operator
-*   `POST /api/auth/login` - Authenticate session
-*   `GET /api/ice-servers` - Fetch WebRTC traversal coordinates (STUN/TURN)
-*   `GET /api/messages/:userId` - Retrieve encrypted comms history
+For watching/sharing across different networks (not just one LAN), configure a
+TURN server — see [`QUESTIONS.md`](./QUESTIONS.md) for the 5-minute setup.
+
+## ⚙️ Server environment (`server/.env`)
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `JWT_SECRET` | yes | Signs auth tokens; server refuses to start without it |
+| `PORT` | no | Server port (default 3001) |
+| `ALLOWED_ORIGINS` | no | Comma-separated CORS allowlist for production |
+| `TURN_SERVER_URL` / `TURN_SERVER_USERNAME` / `TURN_SERVER_PASSWORD` | no | TURN relay for cross-network P2P |
+
+## 🧪 Tests
+
+```bash
+npm run test:e2e   # Playwright: sync drift, restart persistence, P2P resume,
+                   # transfers, streaming, voice, and DM encryption
+```
+
+## 📋 Key API routes
+
+*   `POST /api/auth/guest` — create an anonymous identity
+*   `POST /api/auth/signup` · `POST /api/auth/login` — accounts (signup upgrades a guest in place)
+*   `POST /api/auth/public-key` — publish an E2E-DM public key
+*   `GET /api/ice-servers` — STUN/TURN configuration for WebRTC
+*   `GET /api/messages/:userId` · `GET /api/conversations` — DM history (ciphertext)
 
 ---
 
-**Protocol Note**: This project is under active development by the Beacon V2 team. Recent updates focused on P2P handshake reliability and mobile UI clipping fixes. 🦞
+See [`CLAUDE.md`](./CLAUDE.md) for architecture and the rebuild log, and
+[`DESIGN.md`](./DESIGN.md) for design direction.

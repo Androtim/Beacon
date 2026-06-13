@@ -69,8 +69,8 @@ SHA-256 byte-identity, transfer e2e, streamed playback, voice with fake audio
 devices, and ciphertext-on-the-server verification for DMs.
 
 Known follow-ups (see QUESTIONS.md): TURN credentials (env-ready, account
-needed), HLS via hls.js if wanted, DM passphrase key backup, device-only DM
-delivery toggle, OPFS orphan sweep for abandoned partial transfers.
+needed), DM passphrase key backup, device-only DM delivery toggle, OPFS orphan
+sweep for abandoned partial transfers. (HLS dropped — not needed.)
 
 ### Known-broken (inherited, fixed by phases 1–3)
 
