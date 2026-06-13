@@ -112,3 +112,47 @@ export async function decryptMessage(myPrivateKey, theirPublicJwkString, envelop
     return null
   }
 }
+
+// ---------- Group messages ----------
+//
+// ECDH is pairwise, so a group message is encrypted once per recipient into an
+// envelope map { userId: envelope }. The server stores it opaquely and stays
+// zero-knowledge. The sender is omitted from the map: ECDH is symmetric, so to
+// read their own history they decrypt any member's envelope with that member's
+// public key.
+
+/** Build the per-member envelope map (JSON string) for a group message. */
+export async function encryptGroupMessage(myPrivateKey, members, myId, plaintext) {
+  const map = {}
+  for (const m of members) {
+    if (m.id === myId || !m.publicKey) continue
+    map[m.id] = await encryptMessage(myPrivateKey, m.publicKey, plaintext)
+  }
+  return JSON.stringify(map)
+}
+
+/** Decrypt a group envelope map for `myId`, given who sent it. */
+export async function decryptGroupMessage(myPrivateKey, members, myId, senderId, bodyJson) {
+  let map
+  try {
+    map = JSON.parse(bodyJson)
+  } catch {
+    return bodyJson // legacy plaintext
+  }
+  if (!map || typeof map !== 'object' || map.v) return bodyJson
+  if (!myPrivateKey) return '🔒 (encrypted)'
+
+  // Recipient path: decrypt the envelope addressed to me using the sender's key.
+  if (map[myId]) {
+    const sender = members.find((m) => m.id === senderId)
+    return (await decryptMessage(myPrivateKey, sender?.publicKey, map[myId])) ?? '🔒 (sent to another device)'
+  }
+  // Sender path: no envelope for me — decrypt any member's with their key.
+  for (const m of members) {
+    if (m.id !== myId && m.publicKey && map[m.id]) {
+      const plain = await decryptMessage(myPrivateKey, m.publicKey, map[m.id])
+      if (plain != null) return plain
+    }
+  }
+  return '🔒 (sent to another device)'
+}

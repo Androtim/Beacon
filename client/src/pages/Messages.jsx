@@ -2,19 +2,32 @@ import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../hooks/useSocket'
-import { Send, Search, User, ArrowLeft, MessageSquare, ShieldAlert, Paperclip, Download, FileIcon, Check, Tv } from 'lucide-react'
+import { Send, Search, User, Users, ArrowLeft, MessageSquare, ShieldAlert, Paperclip, Download, FileIcon, Check, Tv, Plus, X } from 'lucide-react'
 import axios from 'axios'
-import { getOrCreateKeyPair, encryptMessage, decryptMessage, isEnvelope } from '../lib/dmCrypto'
+import { getOrCreateKeyPair, encryptMessage, decryptMessage, isEnvelope, encryptGroupMessage, decryptGroupMessage } from '../lib/dmCrypto'
 import { useDmFiles } from '../hooks/useDmFiles'
+import { useGroups } from '../hooks/useGroups'
 import { formatFileSize as formatSize } from '../context/TransfersContext'
 
 export default function Messages() {
   const { user, isGuest } = useAuth()
   const socket = useSocket()
   const { transfers, sendFile, acceptFile, declineFile, hydrate } = useDmFiles({ socket, me: user })
+  const { groups, createGroup } = useGroups({ socket, enabled: !isGuest })
   const attachRef = useRef(null)
   const navigate = useNavigate()
   const [partyInvites, setPartyInvites] = useState([]) // {from, fromUsername, roomId}
+
+  // Group DM state. selectedGroup takes over the main pane when set.
+  const [selectedGroup, setSelectedGroup] = useState(null)
+  const selectedGroupRef = useRef(null)
+  selectedGroupRef.current = selectedGroup
+  const [groupMessages, setGroupMessages] = useState([])
+  const [showNewGroup, setShowNewGroup] = useState(false)
+  const [groupName, setGroupName] = useState('')
+  const [groupPicks, setGroupPicks] = useState([]) // [{id, username}]
+  const [groupSearch, setGroupSearch] = useState('')
+  const [groupSearchResults, setGroupSearchResults] = useState([])
 
   // Watch-party invites arriving in a DM.
   useEffect(() => {
@@ -140,6 +153,99 @@ export default function Messages() {
     }
   }
 
+  // Selecting a 1:1 and a group are mutually exclusive in the main pane.
+  const openUser = (u) => { setSelectedGroup(null); setSelectedUser(u) }
+  const openGroup = (g) => { setSelectedUser(null); setSelectedGroup(g) }
+
+  useEffect(() => {
+    if (selectedGroup) fetchGroupMessages(selectedGroup.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedGroup?.id])
+
+  // Live group messages for the open group.
+  useEffect(() => {
+    if (!socket) return
+    const onGroupMsg = async ({ groupId, id, from, body, timestamp, kind }) => {
+      const g = selectedGroupRef.current
+      if (!g || g.id !== groupId) return
+      const text = kind === 'text'
+        ? await decryptGroupMessage(keysRef.current?.privateKey, g.members, user.id, from.id, body)
+        : body
+      setGroupMessages((p) => [...p, { id, from, text, timestamp, kind }])
+    }
+    socket.on('group-message', onGroupMsg)
+    return () => socket.off('group-message', onGroupMsg)
+  }, [socket, user?.id])
+
+  const fetchGroupMessages = async (groupId) => {
+    try {
+      const res = await axios.get(`/api/groups/${groupId}/messages`)
+      const g = res.data.group // fresh roster + public keys
+      const priv = keysRef.current?.privateKey
+      const decrypted = await Promise.all(res.data.messages.map(async (m) => ({
+        ...m,
+        text: m.kind === 'text'
+          ? await decryptGroupMessage(priv, g.members, user.id, m.from.id, m.body)
+          : m.body,
+      })))
+      setGroupMessages(decrypted)
+      // Keep members/keys current without retriggering the fetch effect (keyed on id).
+      setSelectedGroup((cur) => (cur && cur.id === g.id ? g : cur))
+    } catch (err) {
+      console.error('Failed to load group')
+    }
+  }
+
+  const sendGroupMessage = async (e) => {
+    e.preventDefault()
+    const g = selectedGroup
+    if (!newMessage.trim() || !g || !socket) return
+    const timestamp = Date.now()
+    const plaintext = newMessage
+    let body = plaintext
+    if (keysRef.current) {
+      try {
+        body = await encryptGroupMessage(keysRef.current.privateKey, g.members, user.id, plaintext)
+      } catch (err) {
+        console.error('Group encryption failed, not sending:', err)
+        return
+      }
+    }
+    socket.emit('group-message', { groupId: g.id, body, timestamp })
+    setGroupMessages((p) => [...p, { id: `local-${timestamp}`, from: { id: user.id, username: user.username }, text: plaintext, timestamp, kind: 'text' }])
+    setNewMessage('')
+  }
+
+  const handleGroupSearch = async (e) => {
+    const q = e.target.value
+    setGroupSearch(q)
+    if (q.length > 2) {
+      try {
+        const res = await axios.get(`/api/users/search?query=${q}`)
+        setGroupSearchResults(res.data.users.filter((u) => u.id !== user.id))
+      } catch {}
+    } else {
+      setGroupSearchResults([])
+    }
+  }
+
+  const togglePick = (u) => {
+    setGroupPicks((p) => (p.some((x) => x.id === u.id) ? p.filter((x) => x.id !== u.id) : [...p, { id: u.id, username: u.username }]))
+  }
+
+  const submitNewGroup = async () => {
+    if (groupPicks.length === 0) return
+    const name = groupName.trim() || groupPicks.map((p) => p.username).join(', ').slice(0, 80)
+    try {
+      const g = await createGroup(name, groupPicks.map((p) => p.id))
+      setShowNewGroup(false)
+      setGroupName(''); setGroupPicks([]); setGroupSearch(''); setGroupSearchResults([])
+      openGroup(g)
+    } catch (err) {
+      console.error('Failed to create group')
+    }
+  }
+
   const handleSearch = async (e) => {
     const q = e.target.value
     setSearchQuery(q)
@@ -216,7 +322,16 @@ export default function Messages() {
         <div className="p-4 border-b space-y-4" style={{ borderColor: 'var(--border)' }}>
           <div className="flex items-center gap-3">
             <Link to="/" className="nav-item !px-2 !py-2"><ArrowLeft size={16} /></Link>
-            <h2 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Messages</h2>
+            <h2 className="text-sm font-bold uppercase tracking-wider flex-1" style={{ color: 'var(--text-primary)' }}>Messages</h2>
+            <button
+              type="button"
+              onClick={() => setShowNewGroup(true)}
+              className="btn btn-secondary !px-2.5 h-8 text-[11px] inline-flex items-center gap-1"
+              title="New group"
+              data-testid="new-group"
+            >
+              <Users size={14} /> Group
+            </button>
           </div>
           <div className="relative">
             <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-secondary)' }} />
@@ -236,7 +351,7 @@ export default function Messages() {
             searchResults.map(u => (
               <div 
                 key={u.id} 
-                onClick={() => { setSelectedUser(u); setSearchResults([]); setSearchQuery('') }}
+                onClick={() => { openUser(u); setSearchResults([]); setSearchQuery('') }}
                 className="p-3.5 cursor-pointer flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
               >
                 <div className="w-9 h-9 rounded-xl grid place-items-center font-bold" style={{ background: 'rgb(var(--accent) / 0.15)', color: 'rgb(var(--accent))' }}>
@@ -245,11 +360,40 @@ export default function Messages() {
                 <div className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{u.username}</div>
               </div>
             ))
-          ) : mergedConvos.length > 0 ? (
-            mergedConvos.map(conv => (
-              <div 
-                key={conv.user.id} 
-                onClick={() => setSelectedUser(conv.user)}
+          ) : (groups.length > 0 || mergedConvos.length > 0) ? (
+            <>
+            {groups.map(group => (
+              <div
+                key={group.id}
+                onClick={() => openGroup(group)}
+                className="p-4 cursor-pointer flex items-center gap-3 transition-colors"
+                data-testid="group-convo"
+                style={selectedGroup?.id === group.id
+                  ? { background: 'rgb(var(--accent) / 0.1)', borderLeft: '2px solid rgb(var(--accent))' }
+                  : undefined}
+              >
+                <div className="w-10 h-10 rounded-xl grid place-items-center shrink-0" style={{ background: 'rgb(var(--accent) / 0.15)', color: 'rgb(var(--accent))' }}>
+                  <Users size={20} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-baseline mb-0.5">
+                    <span className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>{group.name}</span>
+                    {group.lastMessage && (
+                      <span className="text-[9px] shrink-0 font-mono" style={{ color: 'var(--text-secondary)' }}>
+                        {new Date(group.lastMessage.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] truncate" style={{ color: 'var(--text-secondary)' }}>
+                    {group.members.length} members
+                  </p>
+                </div>
+              </div>
+            ))}
+            {mergedConvos.map(conv => (
+              <div
+                key={conv.user.id}
+                onClick={() => openUser(conv.user)}
                 className="p-4 cursor-pointer flex items-center gap-3 transition-colors"
                 style={selectedUser?.id === conv.user.id
                   ? { background: 'rgb(var(--accent) / 0.1)', borderLeft: '2px solid rgb(var(--accent))' }
@@ -270,7 +414,8 @@ export default function Messages() {
                   </p>
                 </div>
               </div>
-            ))
+            ))}
+            </>
           ) : (
             <div className="p-8 text-center mt-10" style={{ color: 'var(--text-secondary)' }}>
               <MessageSquare className="mx-auto mb-3 opacity-20" size={24} />
@@ -282,7 +427,54 @@ export default function Messages() {
 
       {/* Main Chat Area */}
       <div className="flex-1 glass-card flex flex-col overflow-hidden">
-        {selectedUser ? (
+        {selectedGroup ? (
+          <>
+            <header className="p-4 border-b flex items-center gap-3" style={{ borderColor: 'var(--border)' }}>
+              <div className="w-9 h-9 rounded-xl grid place-items-center" style={{ background: 'rgb(var(--accent) / 0.15)', color: 'rgb(var(--accent))' }}>
+                <Users size={18} />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }} data-testid="group-title">{selectedGroup.name}</div>
+                <div className="text-[10px] truncate" style={{ color: 'var(--text-secondary)' }}>
+                  {selectedGroup.members.map((m) => m.username).join(', ')}
+                </div>
+              </div>
+            </header>
+
+            <main className="flex-1 overflow-y-auto p-6 flex flex-col gap-3">
+              {groupMessages.map((msg, i) => {
+                const isMe = msg.from.id === user.id
+                return (
+                  <div key={msg.id || i} className={`flex flex-col max-w-[75%] ${isMe ? 'self-end items-end' : 'self-start items-start'}`} data-testid="group-message">
+                    {!isMe && <span className="text-[9px] font-bold mb-0.5 px-1" style={{ color: 'rgb(var(--accent))' }}>{msg.from.username}</span>}
+                    <div className="px-4 py-2.5 text-xs"
+                      style={isMe
+                        ? { background: 'rgb(var(--accent))', color: '#1a0f0d', borderRadius: 'var(--radius)', borderTopRightRadius: 4 }
+                        : { background: 'var(--surface-raised)', color: 'var(--text-primary)', borderRadius: 'var(--radius)', borderTopLeftRadius: 4 }}>
+                      {msg.text}
+                    </div>
+                    <span className="text-[9px] font-mono mt-1 px-1" style={{ color: 'var(--text-secondary)' }}>
+                      {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                )
+              })}
+              <div ref={messagesEndRef} />
+            </main>
+
+            <form onSubmit={sendGroupMessage} className="p-4 border-t flex gap-2 items-center" style={{ borderColor: 'var(--border)' }}>
+              <input
+                type="text"
+                className="input-field flex-1 h-11"
+                placeholder="Message the group…"
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                data-testid="group-input"
+              />
+              <button type="submit" className="btn btn-primary w-11 h-11 !p-0 shrink-0" data-testid="group-send"><Send size={16} /></button>
+            </form>
+          </>
+        ) : selectedUser ? (
           <>
             <header className="p-4 border-b flex justify-between items-center" style={{ borderColor: 'var(--border)' }}>
               <div className="flex items-center gap-3">
@@ -396,6 +588,48 @@ export default function Messages() {
           </div>
         )}
       </div>
+
+      {/* New group modal */}
+      {showNewGroup && (
+        <div className="fixed inset-0 z-50 grid place-items-center p-4" style={{ background: 'rgb(0 0 0 / 0.5)' }} onClick={() => setShowNewGroup(false)}>
+          <div className="glass-card w-full max-w-md p-6" onClick={(e) => e.stopPropagation()} data-testid="new-group-modal">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>New group</h3>
+              <button onClick={() => setShowNewGroup(false)} className="nav-item !px-2 !py-2"><X size={16} /></button>
+            </div>
+            <input className="input-field h-10 mb-3" placeholder="Group name (optional)" value={groupName} onChange={(e) => setGroupName(e.target.value)} data-testid="new-group-name" />
+            {groupPicks.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {groupPicks.map((p) => (
+                  <span key={p.id} className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg" style={{ background: 'rgb(var(--accent) / 0.15)', color: 'rgb(var(--accent))' }}>
+                    {p.username}
+                    <button type="button" onClick={() => togglePick(p)}><X size={11} /></button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="relative mb-2">
+              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-secondary)' }} />
+              <input className="input-field pl-9 h-10" placeholder="Add people…" value={groupSearch} onChange={handleGroupSearch} data-testid="new-group-search" />
+            </div>
+            <div className="max-h-48 overflow-y-auto mb-4">
+              {groupSearchResults.map((u) => {
+                const picked = groupPicks.some((x) => x.id === u.id)
+                return (
+                  <div key={u.id} onClick={() => togglePick(u)} className="p-2.5 cursor-pointer flex items-center gap-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/40" data-testid="new-group-result">
+                    <div className="w-8 h-8 rounded-lg grid place-items-center" style={{ background: 'rgb(var(--accent) / 0.15)', color: 'rgb(var(--accent))' }}><User size={16} /></div>
+                    <span className="text-xs font-bold flex-1" style={{ color: 'var(--text-primary)' }}>{u.username}</span>
+                    {picked && <Check size={14} style={{ color: 'rgb(var(--accent))' }} />}
+                  </div>
+                )
+              })}
+            </div>
+            <button onClick={submitNewGroup} disabled={groupPicks.length === 0} className="btn btn-primary w-full h-11 text-xs disabled:opacity-40" data-testid="new-group-create">
+              Create group{groupPicks.length > 0 ? ` (${groupPicks.length + 1})` : ''}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

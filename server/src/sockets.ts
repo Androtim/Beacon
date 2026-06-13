@@ -3,7 +3,8 @@ import type { Server as HttpServer } from 'http'
 import { randomUUID } from 'crypto'
 import type { z } from 'zod'
 import type { ServerToClientEvents, RoomFileShare, FileInfo } from '../../shared/protocol.js'
-import { findUserById, createMessage, getRoom } from './db.js'
+import { findUserById, createMessage, getRoom, isGroupMember, createGroupMessage, groupMemberIds } from './db.js'
+import type { GroupSummary } from '../../shared/protocol.js'
 import { verifyToken } from './middleware.js'
 import { schemas, type SchemaMap } from './validation.js'
 import * as rooms from './rooms.js'
@@ -33,6 +34,31 @@ const streamRequests = new Map<string, { roomId: string; url: string; fromUserId
 
 const FILE_SHARE_TTL_MS = 30 * 60 * 1000
 
+// Module-level handle so REST routes (e.g. group creation) can push live
+// notifications to connected members without owning the socket server.
+let ioRef: BeaconServer | null = null
+
+/** Emit an event to each listed user's connected socket (skips offline users). */
+export function emitToUsers<E extends keyof ServerToClientEvents>(
+  userIds: string[],
+  event: E,
+  ...args: Parameters<ServerToClientEvents[E]>
+): void {
+  if (!ioRef) return
+  const seen = new Set<string>()
+  for (const uid of userIds) {
+    const sid = onlineUsers.get(uid)?.socketId
+    if (sid && !seen.has(sid)) {
+      seen.add(sid)
+      ioRef.to(sid).emit(event, ...args)
+    }
+  }
+}
+
+export function notifyGroupCreated(group: GroupSummary): void {
+  emitToUsers(group.members.map((m) => m.id), 'group-created', { group })
+}
+
 export default function initSocket(server: HttpServer, allowOrigin: (origin: string | undefined) => boolean) {
   const io: BeaconServer = new Server(server, {
     cors: {
@@ -44,6 +70,7 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
     pingTimeout: 120000,
     pingInterval: 30000,
   })
+  ioRef = io
 
   io.use((socket, next) => {
     // Auth token only via handshake.auth — never query strings (they end up in logs).
@@ -232,6 +259,33 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
       }
       const sid = onlineUsers.get(to)?.socketId
       if (sid) io.to(sid).emit('dm-party-invite', { from: userId, fromUsername: username, roomId })
+    })
+
+    // ---- Group DMs ----
+    on('group-message', ({ groupId, body, timestamp, kind, meta }) => {
+      if (isGuest) return
+      // Only members may post; this also rejects stale/forged group ids.
+      if (!isGroupMember(groupId, userId)) return
+      const ts = typeof timestamp === 'number' ? timestamp : Date.now()
+      let saved
+      try {
+        saved = createGroupMessage(groupId, userId, body, ts, kind ?? 'text', meta ?? null)
+      } catch (e) {
+        console.error('Failed to persist group message:', e)
+        return
+      }
+      const payload = {
+        groupId,
+        id: saved.id,
+        from: { id: userId, username },
+        body,
+        timestamp: ts,
+        kind: saved.kind,
+        meta: saved.meta,
+      }
+      // Fan out to every member except the sender (their client echoes locally).
+      const recipients = groupMemberIds(groupId).filter((id) => id !== userId)
+      emitToUsers(recipients, 'group-message', payload)
     })
 
     // ---- Generic P2P file share (share codes) ----

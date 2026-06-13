@@ -5,8 +5,11 @@ import cors from 'cors'
 import rateLimit from 'express-rate-limit'
 import authRoutes from './auth.js'
 import { authenticateToken, requireAccount } from './middleware.js'
-import { getMessagesBetween, getConversations, searchUsers } from './db.js'
-import initSocket from './sockets.js'
+import {
+  getMessagesBetween, getConversations, searchUsers,
+  createGroup, getGroupsForUser, getGroup, getGroupMessages, isGroupMember,
+} from './db.js'
+import initSocket, { notifyGroupCreated } from './sockets.js'
 
 if (!process.env.JWT_SECRET) {
   console.error('❌ ERROR: JWT_SECRET is not set. The server cannot start without it.')
@@ -128,6 +131,32 @@ app.get('/api/users/search', authenticateToken, requireAccount, (req, res) => {
   const query = typeof req.query.query === 'string' ? req.query.query.trim() : ''
   if (!query) return res.status(400).json({ message: 'Search query required' })
   res.json({ users: searchUsers(query) })
+})
+
+// ---- Group DMs ----
+app.get('/api/groups', authenticateToken, requireAccount, (req, res) => {
+  res.json({ groups: getGroupsForUser(req.user!.id) })
+})
+
+app.post('/api/groups', authenticateToken, requireAccount, (req, res) => {
+  const name = typeof req.body?.name === 'string' ? req.body.name.slice(0, 80) : ''
+  const memberIds = Array.isArray(req.body?.memberIds)
+    ? req.body.memberIds.filter((x: unknown): x is string => typeof x === 'string').slice(0, 50)
+    : []
+  // A group needs at least one other member besides the creator.
+  const others = memberIds.filter((id: string) => id !== req.user!.id)
+  if (others.length === 0) return res.status(400).json({ message: 'Pick at least one other person' })
+  const group = createGroup(name, req.user!.id, others)
+  notifyGroupCreated(group)
+  res.status(201).json({ group })
+})
+
+app.get('/api/groups/:id/messages', authenticateToken, requireAccount, (req, res) => {
+  const groupId = req.params.id
+  if (!isGroupMember(groupId, req.user!.id)) return res.status(403).json({ message: 'Not a member of this group' })
+  const group = getGroup(groupId)
+  if (!group) return res.status(404).json({ message: 'Group not found' })
+  res.json({ group, messages: getGroupMessages(groupId) })
 })
 
 initSocket(server, allowOrigin)
