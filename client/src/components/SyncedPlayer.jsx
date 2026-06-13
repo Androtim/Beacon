@@ -34,6 +34,10 @@ export default function SyncedPlayer({ src, playback, serverNow, isHost, onInten
     onUserPlay: (t) => intentRef.current?.play(t),
     onUserPause: (t) => intentRef.current?.pause(t),
     onUserSeek: (t) => intentRef.current?.seek(t),
+    // When the video ends, pause the room AT the end so the authoritative
+    // position stops advancing past the duration — otherwise the drift loop
+    // keeps seeking past the end and the video loops on its final frame.
+    onEnded: (duration) => intentRef.current?.pause(duration || playbackRef.current?.position || 0),
     onAutoplayMuted: () => setNeedsUnmute(true),
   }
   const callbacksRef = useRef(adapterCallbacks)
@@ -86,7 +90,16 @@ export default function SyncedPlayer({ src, playback, serverNow, isHost, onInten
       // offset causes a spurious hard-seek right after join.
       if (!adapter || !state || !state.url || now == null) return
 
-      const target = targetPosition(state, now)
+      // Clamp the target to the media's length so we never steer past the end
+      // (which would clamp-to-end and replay the final frame forever).
+      const duration = adapter.getDuration?.() || 0
+      let target = targetPosition(state, now)
+      if (duration > 0) target = Math.min(target, duration)
+
+      // If the room thinks we're playing but the target is at the very end,
+      // the video has finished — leave it sitting at the end (the ender will
+      // have sent a pause), don't keep forcing replay.
+      if (state.isPlaying && duration > 0 && target >= duration - 0.25) return
 
       // Align play/pause state first.
       if (state.isPlaying && adapter.isPaused()) {
