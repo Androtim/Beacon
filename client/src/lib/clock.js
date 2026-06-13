@@ -38,7 +38,9 @@ export function createClock(socket) {
 
   return {
     calibrate,
-    serverNow: () => Date.now() + offset,
+    // null until calibrated, so sync consumers can hold off rather than steer
+    // with a wrong offset for the first seconds.
+    serverNow: () => (calibrated ? Date.now() + offset : null),
     isCalibrated: () => calibrated,
     getOffset: () => offset,
   }

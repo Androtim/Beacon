@@ -60,10 +60,12 @@ export default function SyncedPlayer({ src, playback, serverNow, isHost, onInten
       const mount = document.createElement('div')
       ytContainerRef.current.innerHTML = ''
       ytContainerRef.current.appendChild(mount)
-      createYouTubeAdapter(mount, ytVideoId, stableCallbacks).then((adapter) => {
-        if (cancelled) adapter.destroy()
-        else adapterRef.current = adapter
-      })
+      createYouTubeAdapter(mount, ytVideoId, stableCallbacks)
+        .then((adapter) => {
+          if (cancelled) adapter.destroy()
+          else adapterRef.current = adapter
+        })
+        .catch((err) => console.error('YouTube player failed to initialize:', err))
     }
 
     return () => {
@@ -79,9 +81,12 @@ export default function SyncedPlayer({ src, playback, serverNow, isHost, onInten
     const tick = () => {
       const adapter = adapterRef.current
       const state = playbackRef.current
-      if (!adapter || !state || !state.url) return
+      const now = serverNow()
+      // No corrections until the clock is calibrated — steering with a wrong
+      // offset causes a spurious hard-seek right after join.
+      if (!adapter || !state || !state.url || now == null) return
 
-      const target = targetPosition(state, serverNow())
+      const target = targetPosition(state, now)
 
       // Align play/pause state first.
       if (state.isPlaying && adapter.isPaused()) {

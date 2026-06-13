@@ -12,8 +12,9 @@ export function useWatchParty(roomId, user) {
   const [fileShare, setFileShare] = useState(null)
 
   // Clock offset to the server, recalibrated on every (re)connect.
+  // serverNow() is null until the first calibration completes.
   const clockRef = useRef(null)
-  const serverNow = useCallback(() => clockRef.current?.serverNow() ?? Date.now(), [])
+  const serverNow = useCallback(() => clockRef.current?.serverNow() ?? null, [])
 
   // Join on mount AND on every reconnect: the server treats a rejoin as a
   // presence refresh and replies with the full room state (resync).

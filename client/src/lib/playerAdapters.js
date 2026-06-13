@@ -101,14 +101,24 @@ export async function createYouTubeAdapter(container, videoId, callbacks = {}) {
   let destroyed = false
   let lastPolled = { time: 0, at: Date.now(), rate: 1 }
 
-  const player = await new Promise((resolve) => {
+  const player = await new Promise((resolve, reject) => {
+    // YT.Player gives no rejection path of its own — guard against a player
+    // that never becomes ready (bad video id, blocked embed, network failure).
+    const failsafe = setTimeout(() => reject(new Error('YouTube player never became ready')), 15_000)
     const p = new YT.Player(container, {
       videoId,
       width: '100%',
       height: '100%',
       playerVars: { controls: 1, rel: 0, disablekb: 0, playsinline: 1 },
       events: {
-        onReady: () => resolve(p),
+        onReady: () => {
+          clearTimeout(failsafe)
+          resolve(p)
+        },
+        onError: (e) => {
+          clearTimeout(failsafe)
+          reject(new Error(`YouTube player error ${e.data}`))
+        },
         onStateChange: (e) => {
           if (suppress.active() || destroyed) return
           if (e.data === YT.PlayerState.PLAYING) callbacks.onUserPlay?.(p.getCurrentTime())
