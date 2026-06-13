@@ -11,6 +11,7 @@ import WatchParty from './pages/WatchParty'
 import Settings from './pages/Settings'
 import Messages from './pages/Messages'
 import Layout from './components/Layout'
+import ThemeReset from './components/ThemeReset'
 import { Gem, AlertTriangle, RefreshCw } from 'lucide-react'
 
 function ProtectedRoute({ children }) {
@@ -75,6 +76,7 @@ function App() {
       <ThemeProvider>
         <AuthProvider>
           <SocketProvider>
+          <ThemeReset />
           <Router>
             <Layout>
               <Routes>
