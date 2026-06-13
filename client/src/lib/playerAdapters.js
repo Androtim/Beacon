@@ -26,15 +26,18 @@ export function createHtml5Adapter(video, callbacks = {}) {
     if (!suppress.active() && !video.ended) callbacks.onUserPause?.(video.currentTime)
   }
   const onSeeked = () => { if (!suppress.active()) callbacks.onUserSeek?.(video.currentTime) }
+  const onEnded = () => callbacks.onEnded?.(video.duration || video.currentTime)
 
   video.addEventListener('play', onPlay)
   video.addEventListener('pause', onPause)
   video.addEventListener('seeked', onSeeked)
+  video.addEventListener('ended', onEnded)
 
   return {
     kind: 'html5',
     allowedRates: null, // continuous rates supported
     getCurrentTime: () => video.currentTime,
+    getDuration: () => (Number.isFinite(video.duration) ? video.duration : 0),
     isPaused: () => video.paused,
     setRate: (r) => { if (video.playbackRate !== r) video.playbackRate = r },
     seek: (t) => suppress.guard(() => { video.currentTime = t }),
@@ -50,6 +53,7 @@ export function createHtml5Adapter(video, callbacks = {}) {
       video.removeEventListener('play', onPlay)
       video.removeEventListener('pause', onPause)
       video.removeEventListener('seeked', onSeeked)
+      video.removeEventListener('ended', onEnded)
     },
   }
 }
@@ -120,6 +124,7 @@ export async function createYouTubeAdapter(container, videoId, callbacks = {}) {
           reject(new Error(`YouTube player error ${e.data}`))
         },
         onStateChange: (e) => {
+          if (e.data === YT.PlayerState.ENDED) { callbacks.onEnded?.(p.getDuration?.() ?? 0); return }
           if (suppress.active() || destroyed) return
           if (e.data === YT.PlayerState.PLAYING) callbacks.onUserPlay?.(p.getCurrentTime())
           else if (e.data === YT.PlayerState.PAUSED) callbacks.onUserPause?.(p.getCurrentTime())
@@ -145,6 +150,7 @@ export async function createYouTubeAdapter(container, videoId, callbacks = {}) {
     kind: 'youtube',
     allowedRates: player.getAvailablePlaybackRates?.() ?? [1],
     getCurrentTime: () => player.getCurrentTime?.() ?? 0,
+    getDuration: () => player.getDuration?.() ?? 0,
     isPaused: () => player.getPlayerState?.() !== YT.PlayerState.PLAYING,
     setRate: (r) => { if (player.getPlaybackRate?.() !== r) player.setPlaybackRate?.(r) },
     seek: (t) => suppress.guard(() => player.seekTo?.(t, true)),
