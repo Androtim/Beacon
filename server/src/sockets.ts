@@ -186,6 +186,30 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
       if (rec) io.to(rec.socketId).emit('private-message', { from: { id: userId, username }, message, timestamp: ts })
     })
 
+    // ---- File-in-DM (P2P transfer between two accounts, relayed by userId) ----
+    function dmRecipientSocket(to: string): string | null {
+      if (isGuest) return null
+      const recipient = findUserById(to)
+      if (!recipient || recipient.is_guest) return null
+      return onlineUsers.get(to)?.socketId ?? null
+    }
+    on('dm-file-offer', ({ to, transferId, fileInfo }) => {
+      const sid = dmRecipientSocket(to)
+      if (sid) io.to(sid).emit('dm-file-offer', { from: userId, fromUsername: username, transferId, fileInfo })
+    })
+    on('dm-file-request', ({ to, transferId }) => {
+      const sid = dmRecipientSocket(to)
+      if (sid) io.to(sid).emit('dm-file-request', { from: userId, transferId })
+    })
+    on('dm-file-decline', ({ to, transferId }) => {
+      const sid = dmRecipientSocket(to)
+      if (sid) io.to(sid).emit('dm-file-decline', { from: userId, transferId })
+    })
+    on('dm-file-signal', ({ to, signal }) => {
+      const sid = dmRecipientSocket(to)
+      if (sid) io.to(sid).emit('dm-file-signal', { from: userId, signal })
+    })
+
     // ---- Generic P2P file share (share codes) ----
 
     on('file-share-create', ({ code, files }) => {
