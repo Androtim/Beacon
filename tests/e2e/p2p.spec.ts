@@ -137,8 +137,7 @@ test('share-code flow transfers a file byte-identical between two browsers', asy
   const payload = randomBytes(2 * 1024 * 1024 + 12345) // deliberately not chunk-aligned
   const payloadHash = sha256(payload)
 
-  await sender.goto('/')
-  await sender.getByRole('button', { name: /P2P File Share/i }).click()
+  await sender.goto('/files')
   await sender.getByTestId('fileshare-input').setInputFiles({
     name: 'identical-check.bin',
     mimeType: 'application/octet-stream',
@@ -147,8 +146,7 @@ test('share-code flow transfers a file byte-identical between two browsers', asy
   const code = (await sender.getByTestId('fileshare-code').innerText()).replace(/\s+/g, '')
   expect(code).toHaveLength(8)
 
-  await receiver.goto('/')
-  await receiver.getByRole('button', { name: /P2P File Share/i }).click()
+  await receiver.goto('/files')
   await receiver.getByTestId('fileshare-code-input').fill(code)
   await receiver.getByTestId('fileshare-join').click()
   await expect(receiver.getByTestId('fileshare-accept')).toBeVisible()
@@ -174,16 +172,14 @@ test('multiple files arrive as a zip', async ({ browser }) => {
   const sender = await ctxA.newPage()
   const receiver = await ctxB.newPage()
 
-  await sender.goto('/')
-  await sender.getByRole('button', { name: /P2P File Share/i }).click()
+  await sender.goto('/files')
   await sender.getByTestId('fileshare-input').setInputFiles([
     { name: 'one.bin', mimeType: 'application/octet-stream', buffer: randomBytes(300_000) },
     { name: 'two.bin', mimeType: 'application/octet-stream', buffer: randomBytes(500_000) },
   ])
   const code = (await sender.getByTestId('fileshare-code').innerText()).replace(/\s+/g, '')
 
-  await receiver.goto('/')
-  await receiver.getByRole('button', { name: /P2P File Share/i }).click()
+  await receiver.goto('/files')
   await receiver.getByTestId('fileshare-code-input').fill(code)
   await receiver.getByTestId('fileshare-join').click()
   await expect(receiver.getByTestId('fileshare-accept')).toBeVisible()
