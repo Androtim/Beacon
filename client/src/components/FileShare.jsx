@@ -49,7 +49,7 @@ export default function FileShare({ socket }) {
     } else if (received.length === 1) {
       save(received[0].file, received[0].file.name)
     }
-    // OPFS partials are cleared on "Return to Dashboard" (cancelTransfer), not
+    // OPFS partials are cleared on "Done" (cancelTransfer), not
     // here — the blob being downloaded still references the OPFS bytes.
   }, [])
 
@@ -215,7 +215,7 @@ export default function FileShare({ socket }) {
                 </div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">Receive Files</h3>
                 <p className="text-xs text-slate-400 dark:text-slate-500 mb-6 leading-relaxed">
-                  Enter an 8-character intercept code to build a secure WebRTC pipeline to the sender.
+                  Enter the 8-character code from the sender to start the transfer.
                 </p>
               </div>
               <div className="space-y-3">
@@ -251,7 +251,7 @@ export default function FileShare({ socket }) {
             {/* Share Code Presentation */}
             <div className="glass-card p-6 text-center border border-blue-500/20 bg-blue-500/5">
               <ShieldCheck className="text-blue-500 dark:text-blue-400 mx-auto mb-3" size={36} />
-              <p className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-3">Secure Intercept Coordinate</p>
+              <p className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-3">Your share code</p>
               <div className="flex items-center justify-center gap-1.5 mb-4" data-testid="fileshare-code">
                 {shareCode.split('').map((char, i) => (
                   <span
@@ -273,7 +273,7 @@ export default function FileShare({ socket }) {
             {/* Selected File List / Progress */}
             <div className="glass-card p-0 overflow-hidden border border-slate-200 dark:border-slate-800 shadow-lg">
               <div className="px-5 py-3.5 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Transmitting Package</span>
+                <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Sending</span>
                 <span className="text-xs font-bold text-blue-600 dark:text-blue-400">{selectedFiles.length} file(s)</span>
               </div>
               <div className="p-4 space-y-3 max-h-[260px] overflow-y-auto">
@@ -319,11 +319,11 @@ export default function FileShare({ socket }) {
             {/* Connection coordinates header */}
             <div className="glass-card p-4 flex items-center justify-between bg-slate-50 dark:bg-slate-800/40 border border-slate-200/50 dark:border-slate-800">
               <div>
-                <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">Intercept Code</p>
+                <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">Share code</p>
                 <p className="text-lg font-bold font-mono tracking-widest text-slate-800 dark:text-white">{shareCode}</p>
               </div>
               <div className="px-3 py-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold rounded-lg border border-emerald-500/20">
-                WebRTC Active
+                Connected
               </div>
             </div>
 
@@ -342,16 +342,16 @@ export default function FileShare({ socket }) {
             {receiverStatus === 'connecting' && (
               <div className="glass-card p-8 text-center flex flex-col items-center justify-center border border-slate-200/50 dark:border-slate-800">
                 <Zap className="text-blue-500 dark:text-blue-400 animate-bounce mb-3" size={32} fill="currentColor" />
-                <p className="text-xs font-bold text-slate-650 dark:text-slate-350">Securing WebRTC channel...</p>
-                <p className="text-[10px] text-slate-400 mt-1">Negotiating SDP coordinates with host</p>
+                <p className="text-xs font-bold text-slate-650 dark:text-slate-350">Connecting to the sender…</p>
+                <p className="text-[10px] text-slate-400 mt-1">Setting up a direct connection</p>
               </div>
             )}
 
             {receiverStatus === 'ready' && pendingFiles.length > 0 && (
               <div className="glass-card p-6 border border-slate-200/50 dark:border-slate-800 shadow-xl space-y-5 animate-in slide-in-from-bottom-2 duration-300">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-800 dark:text-white">Files Ready to Intercept</h3>
-                  <p className="text-xs text-slate-400 dark:text-slate-500">Select accept to start browser streaming</p>
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-white">Files ready</h3>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">Accept to start downloading</p>
                 </div>
 
                 <div className="space-y-2.5 max-h-[200px] overflow-y-auto pr-1">
@@ -379,8 +379,8 @@ export default function FileShare({ socket }) {
             {receiverStatus === 'transferring' && (
               <div className="glass-card p-6 border border-slate-200/50 dark:border-slate-800 shadow-lg space-y-6">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold text-slate-400 dark:text-slate-550 uppercase tracking-widest animate-pulse">Streaming Inbound Data</h3>
-                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">P2P Link Live</span>
+                  <h3 className="text-xs font-bold text-slate-400 dark:text-slate-550 uppercase tracking-widest animate-pulse">Downloading</h3>
+                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">Connected</span>
                 </div>
 
                 <div className="space-y-4 max-h-[220px] overflow-y-auto">
@@ -411,16 +411,16 @@ export default function FileShare({ socket }) {
                   <Check size={28} className="animate-bounce" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white">Payload Synchronized</h3>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">All done</h3>
                   <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed mt-1">
-                    All files were downloaded directly from the peer. Check your system's download folder.
+                    Your files were downloaded directly from the sender — check your downloads folder.
                   </p>
                 </div>
                 <button
                   onClick={cancelTransfer}
                   className="btn btn-primary w-full h-11 text-xs uppercase tracking-wider"
                 >
-                  Return to Dashboard
+                  Done
                 </button>
               </div>
             )}
