@@ -11,6 +11,8 @@ import Files from './pages/Files'
 import WatchParty from './pages/WatchParty'
 import Settings from './pages/Settings'
 import Messages from './pages/Messages'
+import Profile from './pages/Profile'
+import Leaderboard from './pages/Leaderboard'
 import Layout from './components/Layout'
 import { Gem, AlertTriangle, RefreshCw } from 'lucide-react'
 
@@ -105,6 +107,21 @@ function App() {
                 <Route path="/messages" element={
                   <ProtectedRoute>
                     <Messages />
+                  </ProtectedRoute>
+                } />
+                <Route path="/leaderboard" element={
+                  <ProtectedRoute>
+                    <Leaderboard />
+                  </ProtectedRoute>
+                } />
+                <Route path="/u/:id" element={
+                  <ProtectedRoute>
+                    <Profile />
+                  </ProtectedRoute>
+                } />
+                <Route path="/profile" element={
+                  <ProtectedRoute>
+                    <Profile />
                   </ProtectedRoute>
                 } />
               </Routes>

@@ -6,7 +6,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import type {
   PublicUser, ConversationSummary, MessagesResponse, PlaybackState,
-  GroupSummary, GroupMessagesResponse,
+  GroupSummary, GroupMessagesResponse, UserStats, ProfileResponse, LeaderboardEntry,
 } from '../../shared/protocol.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -116,6 +116,16 @@ const MIGRATIONS: string[] = [
     meta      TEXT
   );
   CREATE INDEX idx_group_messages ON group_messages (group_id, timestamp);
+  `,
+  // v6: per-user activity stats for profiles + leaderboards.
+  `
+  CREATE TABLE user_stats (
+    user_id         TEXT PRIMARY KEY REFERENCES users(id),
+    messages_sent   INTEGER NOT NULL DEFAULT 0,
+    parties_started INTEGER NOT NULL DEFAULT 0,
+    watch_seconds   INTEGER NOT NULL DEFAULT 0,
+    updated_at      INTEGER NOT NULL DEFAULT 0
+  );
   `,
 ]
 
@@ -532,6 +542,59 @@ export function getGroupMessages(groupId: string): GroupMessagesResponse['messag
     kind: r.kind ?? 'text',
     meta: r.meta ? (JSON.parse(r.meta) as Record<string, unknown>) : undefined,
   }))
+}
+
+// ---------- Stats (profiles + leaderboards) ----------
+
+export const STAT_FIELDS = ['messages_sent', 'parties_started', 'watch_seconds'] as const
+export type StatField = typeof STAT_FIELDS[number]
+
+const bumpStmts = {} as Record<StatField, import('better-sqlite3').Statement>
+const topStmts = {} as Record<StatField, import('better-sqlite3').Statement>
+for (const f of STAT_FIELDS) {
+  bumpStmts[f] = db.prepare(
+    `INSERT INTO user_stats (user_id, ${f}, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET ${f} = ${f} + excluded.${f}, updated_at = excluded.updated_at`
+  )
+  topStmts[f] = db.prepare(
+    `SELECT u.id AS id, u.username AS username, s.${f} AS value
+     FROM user_stats s JOIN users u ON u.id = s.user_id
+     WHERE u.is_guest = 0 AND s.${f} > 0
+     ORDER BY s.${f} DESC LIMIT ?`
+  )
+}
+const selectStats = db.prepare(`SELECT * FROM user_stats WHERE user_id = ?`)
+
+interface StatsRow {
+  user_id: string
+  messages_sent: number
+  parties_started: number
+  watch_seconds: number
+  updated_at: number
+}
+
+export function bumpStat(userId: string, field: StatField, delta: number): void {
+  if (delta <= 0) return
+  bumpStmts[field].run(userId, delta, Date.now())
+}
+
+export function getStats(userId: string): UserStats {
+  const row = selectStats.get(userId) as StatsRow | undefined
+  return {
+    messagesSent: row?.messages_sent ?? 0,
+    partiesStarted: row?.parties_started ?? 0,
+    watchSeconds: row?.watch_seconds ?? 0,
+  }
+}
+
+export function getProfile(userId: string): ProfileResponse | null {
+  const u = findUserById(userId)
+  if (!u) return null
+  return { user: toPublicUser(u), stats: getStats(userId) }
+}
+
+export function topUsers(field: StatField, limit: number): LeaderboardEntry[] {
+  return topStmts[field].all(limit) as LeaderboardEntry[]
 }
 
 export default db

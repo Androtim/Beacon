@@ -244,6 +244,31 @@ export interface GroupMessagesResponse {
   }>
 }
 
+// ---------- Stats / profiles / leaderboards ----------
+
+export interface UserStats {
+  messagesSent: number
+  partiesStarted: number
+  watchSeconds: number
+}
+
+export interface ProfileResponse {
+  user: PublicUser
+  stats: UserStats
+}
+
+export interface LeaderboardEntry {
+  id: string
+  username: string
+  value: number
+}
+
+export interface LeaderboardResponse {
+  messages: LeaderboardEntry[]
+  parties: LeaderboardEntry[]
+  watchTime: LeaderboardEntry[]
+}
+
 export interface MessagesResponse {
   messages: Array<{
     id: string
