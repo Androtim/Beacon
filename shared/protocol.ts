@@ -94,6 +94,12 @@ export interface ClientToServerEvents {
   'chat-message': (data: { roomId: string; message: string; timestamp?: number }) => void
   'private-message': (data: { to: string; message: string; timestamp: number }) => void
 
+  // File-in-DM: P2P transfer between two accounts, relayed by userId.
+  'dm-file-offer': (data: { to: string; transferId: string; fileInfo: FileInfo }) => void
+  'dm-file-request': (data: { to: string; transferId: string }) => void
+  'dm-file-decline': (data: { to: string; transferId: string }) => void
+  'dm-file-signal': (data: { to: string; signal: SignalPayload }) => void
+
   'file-share-create': (data: { code: string; files: FileInfo[] }) => void
   'file-share-join': (data: { code: string }) => void
   'file-share-request': (data: { to: string }) => void
@@ -135,6 +141,11 @@ export interface ServerToClientEvents {
 
   'chat-message': (data: ChatMessage) => void
   'private-message': (data: PrivateMessage) => void
+  // File-in-DM, relayed from the other user.
+  'dm-file-offer': (data: { from: string; fromUsername: string; transferId: string; fileInfo: FileInfo }) => void
+  'dm-file-request': (data: { from: string; transferId: string }) => void
+  'dm-file-decline': (data: { from: string; transferId: string }) => void
+  'dm-file-signal': (data: { from: string; signal: SignalPayload }) => void
   'user-online': (data: { id: string; username: string }) => void
   'user-offline': (userId: string) => void
 

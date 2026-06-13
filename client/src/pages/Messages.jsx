@@ -2,13 +2,17 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../hooks/useSocket'
-import { Send, Search, User, ArrowLeft, MoreVertical, MessageSquare, ShieldAlert } from 'lucide-react'
+import { Send, Search, User, ArrowLeft, MessageSquare, ShieldAlert, Paperclip, Download, FileIcon, Check } from 'lucide-react'
 import axios from 'axios'
 import { getOrCreateKeyPair, encryptMessage, decryptMessage, isEnvelope } from '../lib/dmCrypto'
+import { useDmFiles } from '../hooks/useDmFiles'
+import { formatFileSize as formatSize } from '../context/TransfersContext'
 
 export default function Messages() {
   const { user, isGuest } = useAuth()
   const socket = useSocket()
+  const { transfers, sendFile, acceptFile, declineFile } = useDmFiles({ socket, me: user })
+  const attachRef = useRef(null)
   const [conversations, setConversations] = useState([])
   const [selectedUser, setSelectedUser] = useState(null)
   const selectedUserRef = useRef(null)
@@ -130,6 +134,15 @@ export default function Messages() {
     fetchConversations()
   }
 
+  // Conversation list = real conversations + anyone who's sent us a file but
+  // isn't in our message history yet (so an incoming file is reachable).
+  const mergedConvos = [...conversations]
+  for (const t of transfers) {
+    if (t.peerUsername && !mergedConvos.some((c) => c.user.id === t.peerId)) {
+      mergedConvos.push({ user: { id: t.peerId, username: t.peerUsername }, lastMessage: { message: 'Sent a file', timestamp: Date.now() }, unreadCount: 0 })
+    }
+  }
+
   if (isGuest) {
     return (
       <div className="max-w-[600px] mx-auto px-4 py-24 text-center">
@@ -187,8 +200,8 @@ export default function Messages() {
                 <div className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{u.username}</div>
               </div>
             ))
-          ) : conversations.length > 0 ? (
-            conversations.map(conv => (
+          ) : mergedConvos.length > 0 ? (
+            mergedConvos.map(conv => (
               <div 
                 key={conv.user.id} 
                 onClick={() => setSelectedUser(conv.user)}
@@ -258,10 +271,53 @@ export default function Messages() {
                   </div>
                 )
               })}
+              {/* File transfers in this conversation */}
+              {transfers.filter((t) => t.peerId === selectedUser.id).map((t) => {
+                const isMe = t.direction === 'out'
+                return (
+                  <div key={t.id} className={`flex flex-col max-w-[80%] ${isMe ? 'self-end items-end' : 'self-start items-start'}`} data-testid="dm-file">
+                    <div className="px-3.5 py-3 w-64" style={{ background: 'var(--surface-raised)', color: 'var(--text-primary)', borderRadius: 'var(--radius)' }}>
+                      <div className="flex items-center gap-2.5">
+                        <FileIcon size={18} style={{ color: 'rgb(var(--accent))' }} className="shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold truncate">{t.fileInfo.name}</p>
+                          <p className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>{formatSize(t.fileInfo.size)}</p>
+                        </div>
+                      </div>
+                      {(t.status === 'sending' || t.status === 'downloading') && (
+                        <div className="mt-2.5">
+                          <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'rgb(0 0 0 / 0.2)' }}>
+                            <div className="h-full" style={{ width: `${t.percent}%`, background: 'rgb(var(--accent))' }} />
+                          </div>
+                          <p className="text-[10px] mt-1" style={{ color: 'var(--text-secondary)' }}>
+                            {t.percent}% · {isMe ? 'sending — keep this open' : 'downloading'}
+                          </p>
+                        </div>
+                      )}
+                      {t.status === 'offered' && t.direction === 'in' && (
+                        <div className="flex gap-2 mt-2.5">
+                          <button onClick={() => acceptFile(t.id)} className="btn btn-primary flex-1 h-8 text-[11px]" data-testid="dm-file-accept"><Download size={13} /> Download</button>
+                          <button onClick={() => declineFile(t.id)} className="btn btn-secondary h-8 px-3 text-[11px]">Decline</button>
+                        </div>
+                      )}
+                      {t.status === 'offered' && t.direction === 'out' && (
+                        <p className="text-[10px] mt-2" style={{ color: 'var(--text-secondary)' }}>Waiting for them to accept…</p>
+                      )}
+                      {(t.status === 'saved' || t.status === 'sent') && (
+                        <p className="text-[10px] mt-2 flex items-center gap-1" style={{ color: 'rgb(16 185 129)' }} data-testid="dm-file-done"><Check size={12} /> {t.status === 'saved' ? 'Saved' : 'Sent'}</p>
+                      )}
+                      {t.status === 'declined' && <p className="text-[10px] mt-2 text-rose-400">Declined</p>}
+                    </div>
+                  </div>
+                )
+              })}
               <div ref={messagesEndRef} />
             </main>
 
-            <form onSubmit={sendMessage} className="p-4 border-t flex gap-3 items-center" style={{ borderColor: 'var(--border)' }}>
+            <form onSubmit={sendMessage} className="p-4 border-t flex gap-2 items-center" style={{ borderColor: 'var(--border)' }}>
+              <input ref={attachRef} type="file" className="hidden" data-testid="dm-attach-input"
+                onChange={(e) => { const f = e.target.files[0]; if (f) sendFile(selectedUser.id, f); e.target.value = null }} />
+              <button type="button" onClick={() => attachRef.current?.click()} className="btn btn-secondary w-11 h-11 !p-0 shrink-0" title="Send a file" data-testid="dm-attach"><Paperclip size={16} /></button>
               <input
                 type="text"
                 className="input-field flex-1 h-11"

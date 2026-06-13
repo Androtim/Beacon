@@ -22,7 +22,7 @@ async function fetchIceServers() {
  * transfer protocol + socket signaling. Used by both the share-code flow
  * (signalEvent 'file-share-signal') and watch parties ('video-file-signal').
  */
-export function useFileTransfer({ socket, signalEvent, onFileReceived, onAllReceived }) {
+export function useFileTransfer({ socket, signalEvent, onFileReceived, onAllReceived, selfId }) {
   const [status, setStatus] = useState('idle') // idle|connecting|transferring|complete|error
   const [uploadProgress, setUploadProgress] = useState({})
   const [downloadProgress, setDownloadProgress] = useState({})
@@ -92,7 +92,9 @@ export function useFileTransfer({ socket, signalEvent, onFileReceived, onAllRece
     const iceServers = await fetchIceServers()
     const peer = createPeer({
       sendSignal: (signal) => socket.emit(signalEvent, { to: peerId, signal }),
-      polite: isPolite(socket.id, peerId),
+      // peerId addresses the remote (socketId for rooms, userId for DMs).
+      // selfId must be the matching kind so politeness is symmetric.
+      polite: isPolite(selfId ?? socket.id, peerId),
       iceServers,
       onConnectionState: (state) => {
         if (state === 'connected') {
