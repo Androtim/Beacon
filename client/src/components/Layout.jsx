@@ -63,27 +63,27 @@ export default function Layout({ children }) {
           className={`hidden md:flex shrink-0 flex-col gap-1 p-3 border-r transition-[width] duration-200 ${collapsed ? 'w-[68px]' : 'w-60'}`}
           style={{ borderColor: 'var(--border)' }}
         >
-          {/* Logo + collapse */}
-          <div className={`flex items-center mb-2 ${collapsed ? 'justify-center' : 'justify-between'} px-1 py-2`}>
-            <Link to="/" className="flex items-center gap-3">
-              <BeaconMark />
-              {!collapsed && (
-                <span className="text-lg font-extrabold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-                  Beacon<span className="text-gradient">.</span>
-                </span>
-              )}
-            </Link>
-            {!collapsed && (
-              <button onClick={toggleCollapsed} className="nav-item !px-2 !py-2" title="Collapse sidebar" data-testid="rail-collapse">
-                <PanelLeftClose size={16} />
-              </button>
-            )}
-          </div>
-          {collapsed && (
-            <button onClick={toggleCollapsed} className="nav-item justify-center !px-0 mb-1" title="Expand sidebar" data-testid="rail-expand">
-              <PanelLeft size={16} />
+          {/* Collapse toggle — always in the same spot (top-right of the rail). */}
+          <div className="flex justify-end px-1">
+            <button
+              onClick={toggleCollapsed}
+              className="nav-item !px-2 !py-2"
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              data-testid={collapsed ? 'rail-expand' : 'rail-collapse'}
+            >
+              {collapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
             </button>
-          )}
+          </div>
+
+          {/* Logo */}
+          <Link to="/" className={`flex items-center gap-3 mb-2 px-1 py-2 ${collapsed ? 'justify-center' : ''}`}>
+            <BeaconMark />
+            {!collapsed && (
+              <span className="text-lg font-extrabold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                Beacon<span className="text-gradient">.</span>
+              </span>
+            )}
+          </Link>
 
           {/* Spaces */}
           <nav className="flex flex-col gap-1">
