@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useWatchParty } from '../hooks/useWatchParty'
+import { recordRoom } from '../hooks/useRecentRooms'
 import VideoFileSharing from '../components/VideoFileSharing'
 import SyncedPlayer from '../components/SyncedPlayer'
 import VoicePanel from '../components/VoicePanel'
@@ -23,6 +24,9 @@ export default function WatchParty() {
   const [localFileUrl, setLocalFileUrl] = useState(null)
   const [cinema, setCinema] = useState(false)
   const [copied, setCopied] = useState(false)
+
+  // Remember this room for the sidebar's "open parties" section.
+  useEffect(() => { recordRoom(roomId) }, [roomId])
 
   // P2P-shared files travel as blob URLs, only valid in the browser that made
   // them — everyone plays their own local copy.
