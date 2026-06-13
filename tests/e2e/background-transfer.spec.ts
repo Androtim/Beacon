@@ -21,8 +21,8 @@ test('file share survives navigation and stays in the sidebar', async ({ browser
 
   // Sender leaves Files for Home via in-app navigation (no reload) — the
   // transfer must NOT die, and shows live in the sidebar.
-  await sender.getByRole('link', { name: 'Watch' }).click()
-  await expect(sender.getByTestId('create-party')).toBeVisible() // we're on Home now
+  await sender.getByRole('link', { name: 'Home' }).first().click()
+  await expect(sender.getByTestId('launcher-hero')).toBeVisible() // we're on Home now
   await expect(sender.getByTestId('rail-transfer')).toBeVisible()
 
   // Receiver downloads while the sender sits on Home.

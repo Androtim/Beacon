@@ -3,12 +3,14 @@ import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
 import { useRecentRooms } from '../hooks/useRecentRooms'
 import { useTransfers } from '../context/TransfersContext'
-import { Sun, Moon, Gem, Settings, LogOut, LogIn, Tv, FolderOpen, MessageSquare, PanelLeftClose, PanelLeft, X, ArrowUpDown } from 'lucide-react'
+import Launcher from './Launcher'
+import { Sun, Moon, Gem, Settings, LogOut, LogIn, Home, MessageSquare, PanelLeftClose, PanelLeft, X, ArrowUpDown } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 
+// Watch & Files no longer have their own tabs — they're launched from the
+// unified Launcher (New + code box). Home and Messages remain destinations.
 const SPACES = [
-  { to: '/', label: 'Watch', icon: Tv, match: (p) => p === '/' || p.startsWith('/party') },
-  { to: '/files', label: 'Files', icon: FolderOpen, match: (p) => p.startsWith('/files') },
+  { to: '/', label: 'Home', icon: Home, match: (p) => p === '/' },
   { to: '/messages', label: 'Messages', icon: MessageSquare, match: (p) => p.startsWith('/messages') },
 ]
 
@@ -87,7 +89,13 @@ export default function Layout({ children }) {
             )}
           </Link>
 
-          {/* Spaces */}
+          {/* Unified launcher (New + code) — on Home it lives centered in the
+              page instead, so the rail omits it there. */}
+          {path !== '/' && !collapsed && (
+            <div className="mb-2"><Launcher variant="rail" /></div>
+          )}
+
+          {/* Destinations */}
           <nav className="flex flex-col gap-1">
             {SPACES.map(({ to, label, icon: Icon, match }) => (
               <Link key={to} to={to} className={`nav-item ${match(path) ? 'active' : ''} ${collapsed ? 'justify-center !px-0' : ''}`} title={label}>
@@ -216,7 +224,7 @@ export default function Layout({ children }) {
         <main className="flex-1 w-full relative pt-14 pb-20 md:pt-0 md:pb-0 min-w-0">{children}</main>
 
         {/* Mobile bottom tabs */}
-        <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 h-16 grid grid-cols-3 backdrop-blur-xl border-t"
+        <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 h-16 grid grid-cols-2 backdrop-blur-xl border-t"
           style={{ background: 'var(--glass-bg)', borderColor: 'var(--border)' }}>
           {SPACES.map(({ to, label, icon: Icon, match }) => (
             <Link key={to} to={to} className="flex flex-col items-center justify-center gap-1 transition-colors"
