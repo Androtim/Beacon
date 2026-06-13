@@ -6,32 +6,30 @@ import { ThemeProvider } from './context/ThemeContext'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Home from './pages/Home'
+import Files from './pages/Files'
 import WatchParty from './pages/WatchParty'
 import Settings from './pages/Settings'
 import Messages from './pages/Messages'
 import Layout from './components/Layout'
-import { Loader, Zap, AlertTriangle, RefreshCw } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { Gem, AlertTriangle, RefreshCw } from 'lucide-react'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
-  
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0F172A] flex flex-col items-center justify-center relative overflow-hidden">
-        <div className="orb w-[300px] h-[300px] bg-violet-600/20 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 blur-[100px]" />
-        <motion.div 
-          animate={{ scale: [1, 1.1, 1], opacity: [0.5, 1, 0.5] }}
-          transition={{ duration: 2, repeat: Infinity }}
-          className="relative z-10"
-        >
-          <Zap className="h-12 w-12 text-violet-400 mb-4 mx-auto" fill="currentColor" />
-        </motion.div>
-        <p className="text-violet-400 font-mono text-xs tracking-[0.3em] uppercase animate-pulse relative z-10">Initialising Protocol...</p>
+      <div className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden" style={{ background: 'var(--bg-primary)' }}>
+        <div className="orb w-[320px] h-[320px] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" style={{ background: 'rgb(var(--accent) / 0.4)' }} />
+        <div className="beacon-mark w-14 h-14 rounded-2xl grid place-items-center animate-beacon relative z-10">
+          <Gem size={26} className="text-white" />
+        </div>
+        <p className="mt-5 text-xs font-bold tracking-[0.25em] uppercase relative z-10" style={{ color: 'var(--text-secondary)' }}>
+          Lighting the beacon…
+        </p>
       </div>
     )
   }
-  
+
   return user ? children : <Navigate to="/login" />
 }
 
@@ -85,6 +83,11 @@ function App() {
                 <Route path="/" element={
                   <ProtectedRoute>
                     <Home />
+                  </ProtectedRoute>
+                } />
+                <Route path="/files" element={
+                  <ProtectedRoute>
+                    <Files />
                   </ProtectedRoute>
                 } />
                 <Route path="/party/:id" element={
