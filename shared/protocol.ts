@@ -99,6 +99,7 @@ export interface ClientToServerEvents {
   'dm-file-request': (data: { to: string; transferId: string }) => void
   'dm-file-decline': (data: { to: string; transferId: string }) => void
   'dm-file-signal': (data: { to: string; signal: SignalPayload }) => void
+  'dm-party-invite': (data: { to: string; roomId: string }) => void
 
   'file-share-create': (data: { code: string; files: FileInfo[] }) => void
   'file-share-join': (data: { code: string }) => void
@@ -146,6 +147,7 @@ export interface ServerToClientEvents {
   'dm-file-request': (data: { from: string; transferId: string }) => void
   'dm-file-decline': (data: { from: string; transferId: string }) => void
   'dm-file-signal': (data: { from: string; signal: SignalPayload }) => void
+  'dm-party-invite': (data: { from: string; fromUsername: string; roomId: string }) => void
   'user-online': (data: { id: string; username: string }) => void
   'user-offline': (userId: string) => void
 

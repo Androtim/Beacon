@@ -49,6 +49,7 @@ export const schemas = {
   'dm-file-request': z.object({ to: z.string().min(1).max(64), transferId: z.string().min(1).max(64) }),
   'dm-file-decline': z.object({ to: z.string().min(1).max(64), transferId: z.string().min(1).max(64) }),
   'dm-file-signal': z.object({ to: z.string().min(1).max(64), signal: signalPayload }),
+  'dm-party-invite': z.object({ to: z.string().min(1).max(64), roomId }),
   'file-share-create': z.object({
     code: z.string().regex(/^[A-Za-z0-9]{4,16}$/),
     files: z.array(fileInfo).min(1).max(100),

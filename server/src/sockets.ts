@@ -209,6 +209,10 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
       const sid = dmRecipientSocket(to)
       if (sid) io.to(sid).emit('dm-file-signal', { from: userId, signal })
     })
+    on('dm-party-invite', ({ to, roomId }) => {
+      const sid = dmRecipientSocket(to)
+      if (sid) io.to(sid).emit('dm-party-invite', { from: userId, fromUsername: username, roomId })
+    })
 
     // ---- Generic P2P file share (share codes) ----
 
