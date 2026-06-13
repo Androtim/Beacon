@@ -1,82 +1,29 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useWatchParty } from '../hooks/useWatchParty'
 import VideoFileSharing from '../components/VideoFileSharing'
+import SyncedPlayer from '../components/SyncedPlayer'
 import { ArrowLeft, Send, Users, Video, Link2, Monitor, Info, Film, Radio } from 'lucide-react'
-import videojs from 'video.js'
-import 'video.js/dist/video-js.css'
 
 export default function WatchParty() {
   const { id: roomId } = useParams()
   const { user } = useAuth()
-  const { 
-    participants, isHost, messages, videoState, 
+  const {
+    participants, isHost, messages, playback, serverNow,
     setVideoUrl, playVideo, pauseVideo, seekVideo, sendMessage, connected, socket, fileShare
   } = useWatchParty(roomId, user)
 
-  const videoRef = useRef(null)
-  const playerRef = useRef(null)
-  
   const [urlInput, setUrlInput] = useState('')
   const [chatInput, setChatInput] = useState('')
   const [showInfo, setShowInfo] = useState(false)
   const [hostVideoSource, setHostVideoSource] = useState('url') // 'url' or 'file'
   const [localFileUrl, setLocalFileUrl] = useState(null)
 
-  const isLocalBlob = videoState.url && videoState.url.startsWith('blob:')
-  const activeVideoSrc = isLocalBlob ? (isHost ? videoState.url : localFileUrl) : videoState.url
-
-  // Initialize Video.js
-  useEffect(() => {
-    if (videoRef.current && !playerRef.current) {
-      playerRef.current = videojs(videoRef.current, {
-        controls: true,
-        responsive: true,
-        fluid: true,
-        userActions: { doubleClick: false }
-      })
-
-      // Sync local controls to room (Host only)
-      if (isHost) {
-        playerRef.current.on('play', () => playVideo(playerRef.current.currentTime()))
-        playerRef.current.on('pause', () => pauseVideo(playerRef.current.currentTime()))
-        playerRef.current.on('seeked', () => seekVideo(playerRef.current.currentTime()))
-      }
-    }
-
-    return () => {
-      if (playerRef.current) {
-        playerRef.current.dispose()
-        playerRef.current = null
-      }
-    }
-  }, [isHost, activeVideoSrc]) // Re-initialize player if active source transitions
-
-  // Sync player to room state (For non-hosts or remote updates)
-  useEffect(() => {
-    if (!playerRef.current || !activeVideoSrc) return
-
-    // Remote URL change
-    if (playerRef.current.src() !== activeVideoSrc) {
-      // Determine content type
-      let type = 'video/mp4'
-      if (activeVideoSrc.includes('.webm')) type = 'video/webm'
-      playerRef.current.src({ src: activeVideoSrc, type })
-    }
-
-    // Remote Play/Pause/Seek
-    const localTime = playerRef.current.currentTime()
-    if (Math.abs(localTime - videoState.currentTime) > 1.5) {
-       playerRef.current.currentTime(videoState.currentTime)
-    }
-
-    if (videoState.isPlaying && playerRef.current.paused()) {
-      playerRef.current.play().catch(() => {})
-    } else if (!videoState.isPlaying && !playerRef.current.paused()) {
-      playerRef.current.pause()
-    }
-  }, [videoState, activeVideoSrc])
+  // P2P-shared files travel as blob URLs, which are only valid in the browser
+  // that created them — everyone plays their own local copy.
+  const isLocalBlob = playback.url && playback.url.startsWith('blob:')
+  const activeVideoSrc = isLocalBlob ? (isHost ? playback.url : localFileUrl) : playback.url
 
   const handleUrlSubmit = (e) => {
     e.preventDefault()
@@ -142,9 +89,13 @@ export default function WatchParty() {
                   <p className="text-slate-400 dark:text-slate-500 text-sm font-medium">Awaiting transmission coordinates from host...</p>
                 </div>
               ) : (
-                <div data-vjs-player className="w-full h-full">
-                  <video ref={videoRef} className="video-js vjs-big-play-centered" />
-                </div>
+                <SyncedPlayer
+                  src={activeVideoSrc}
+                  playback={playback}
+                  serverNow={serverNow}
+                  isHost={isHost}
+                  onIntent={{ play: playVideo, pause: pauseVideo, seek: seekVideo }}
+                />
               )}
             </div>
 

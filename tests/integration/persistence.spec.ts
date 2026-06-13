@@ -94,9 +94,9 @@ test.describe('room persistence across server restarts', () => {
     const joined = await joinRoom(socket, roomId)
     expect(joined.isHost).toBe(true)
 
-    const urlSet = new Promise((resolve) => socket.once('video-url-set', resolve))
+    const stateSet = new Promise<any>((resolve) => socket.once('video-state', resolve))
     socket.emit('video-url-set', { roomId, url: 'https://example.com/movie.mp4' })
-    expect(await urlSet).toEqual({ url: 'https://example.com/movie.mp4' })
+    expect((await stateSet).playback.url).toBe('https://example.com/movie.mp4')
     socket.disconnect()
 
     // Full restart: in-memory state is gone, SQLite is not.
@@ -108,7 +108,7 @@ test.describe('room persistence across server restarts', () => {
     socket2.disconnect()
 
     expect(rejoined.isHost).toBe(true) // host role persisted
-    expect(rejoined.videoState.url).toBe('https://example.com/movie.mp4') // video state persisted
+    expect(rejoined.playback.url).toBe('https://example.com/movie.mp4') // video state persisted
   })
 
   test('user accounts survive a restart (token still valid)', async () => {

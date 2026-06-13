@@ -1,33 +1,35 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSocketContext } from '../context/SocketContext'
+import { createClock } from '../lib/clock'
 
 export function useWatchParty(roomId, user) {
   const { socket, connected } = useSocketContext()
   const [participants, setParticipants] = useState([])
   const [isHost, setIsHost] = useState(false)
   const [messages, setMessages] = useState([])
-  const [videoState, setVideoState] = useState({
-    isPlaying: false,
-    currentTime: 0,
-    duration: 0,
-    url: null,
-  })
+  // Authoritative playback state from the server (see shared/sync.ts).
+  const [playback, setPlayback] = useState({ url: null, isPlaying: false, position: 0, atServerTime: 0 })
   const [fileShare, setFileShare] = useState(null)
 
-  // Clock sync lands in Phase 2; until then events use local time.
-  const getSyncedTime = useCallback(() => Date.now(), [])
+  // Clock offset to the server, recalibrated on every (re)connect.
+  const clockRef = useRef(null)
+  const serverNow = useCallback(() => clockRef.current?.serverNow() ?? Date.now(), [])
 
   // Join on mount AND on every reconnect: the server treats a rejoin as a
   // presence refresh and replies with the full room state (resync).
   useEffect(() => {
     if (!socket || !roomId || !user) return
 
-    const join = () => socket.emit('join-room', { roomId })
-    if (socket.connected) join()
-    socket.on('connect', join)
+    clockRef.current = createClock(socket)
+    const onConnect = () => {
+      socket.emit('join-room', { roomId })
+      clockRef.current?.calibrate()
+    }
+    if (socket.connected) onConnect()
+    socket.on('connect', onConnect)
 
     return () => {
-      socket.off('connect', join)
+      socket.off('connect', onConnect)
       socket.emit('leave-room', { roomId })
     }
   }, [socket, roomId, user])
@@ -39,8 +41,11 @@ export function useWatchParty(roomId, user) {
       'room-joined': (data) => {
         setParticipants(data.participants)
         setIsHost(data.isHost)
-        setVideoState((prev) => ({ ...prev, ...data.videoState }))
+        setPlayback(data.playback)
         setFileShare(data.fileShare ?? null)
+      },
+      'video-state': (data) => {
+        setPlayback(data.playback)
       },
       'user-joined': (data) => {
         setParticipants(data.participants)
@@ -62,26 +67,12 @@ export function useWatchParty(roomId, user) {
         setParticipants(data.participants)
       },
       'host-changed': (data) => {
-        setIsHost(data.newHost === (user?.id))
+        setIsHost(data.newHost === user?.id)
         setMessages((prev) => [...prev, {
           type: 'system',
           message: 'Host changed',
           timestamp: Date.now(),
         }])
-      },
-      'video-url-set': (data) => {
-        setVideoState((prev) => ({ ...prev, url: data.url, isPlaying: false, currentTime: 0 }))
-      },
-      'video-play': (data) => {
-        const latency = Date.now() - data.timestamp
-        const compensatedTime = data.currentTime + latency / 1000
-        setVideoState((prev) => ({ ...prev, isPlaying: true, currentTime: compensatedTime }))
-      },
-      'video-pause': (data) => {
-        setVideoState((prev) => ({ ...prev, isPlaying: false, currentTime: data.currentTime }))
-      },
-      'video-seek': (data) => {
-        setVideoState((prev) => ({ ...prev, currentTime: data.currentTime }))
       },
       'chat-message': (data) => {
         setMessages((prev) => [...prev, {
@@ -99,6 +90,8 @@ export function useWatchParty(roomId, user) {
     }
   }, [socket, user?.id])
 
+  // Host intents. The server validates, persists, and broadcasts video-state;
+  // nobody (including the host) applies state locally ahead of the broadcast.
   const setVideoUrl = useCallback((url) => {
     if (!socket || !roomId) return
     socket.emit('video-url-set', { roomId, url })
@@ -106,29 +99,30 @@ export function useWatchParty(roomId, user) {
 
   const playVideo = useCallback((currentTime) => {
     if (!socket || !roomId) return
-    socket.emit('video-play', { roomId, currentTime, timestamp: getSyncedTime() })
-  }, [socket, roomId, getSyncedTime])
+    socket.emit('video-play', { roomId, currentTime })
+  }, [socket, roomId])
 
   const pauseVideo = useCallback((currentTime) => {
     if (!socket || !roomId) return
-    socket.emit('video-pause', { roomId, currentTime, timestamp: getSyncedTime() })
-  }, [socket, roomId, getSyncedTime])
+    socket.emit('video-pause', { roomId, currentTime })
+  }, [socket, roomId])
 
   const seekVideo = useCallback((currentTime) => {
     if (!socket || !roomId) return
-    socket.emit('video-seek', { roomId, currentTime, timestamp: getSyncedTime() })
-  }, [socket, roomId, getSyncedTime])
+    socket.emit('video-seek', { roomId, currentTime })
+  }, [socket, roomId])
 
   const sendMessage = useCallback((message) => {
     if (!socket || !roomId || !user) return
-    socket.emit('chat-message', { roomId, message, timestamp: Date.now() })
+    socket.emit('chat-message', { roomId, message })
   }, [socket, roomId, user])
 
   return {
     participants,
     isHost,
     messages,
-    videoState,
+    playback,
+    serverNow,
     fileShare,
     setVideoUrl,
     playVideo,

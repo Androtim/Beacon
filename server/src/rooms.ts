@@ -1,7 +1,8 @@
-import type { Participant, VideoState } from '../../shared/protocol.js'
+import type { Participant, PlaybackState } from '../../shared/protocol.js'
+import { targetPosition } from '../../shared/sync.js'
 import {
-  getOrCreateRoom, getRoom, setRoomVideoState, setRoomHost,
-  touchRoom, roomVideoState, cleanupStaleRooms, type RoomRow,
+  getOrCreateRoom, getRoom, setRoomPlayback, setRoomHost,
+  touchRoom, roomPlaybackState, cleanupStaleRooms, type RoomRow,
 } from './db.js'
 
 // Room state is persisted in SQLite (survives server restarts); live
@@ -43,7 +44,7 @@ export interface JoinResult {
   room: RoomRow
   participants: Participant[]
   isHost: boolean
-  videoState: VideoState
+  playback: PlaybackState
   rejoined: boolean
 }
 
@@ -71,7 +72,7 @@ export function joinRoom(roomId: string, user: { id: string; username: string },
     room,
     participants: participantsOf(roomId),
     isHost: room.host_id === user.id,
-    videoState: roomVideoState(room),
+    playback: roomPlaybackState(room),
     rejoined,
   }
 }
@@ -139,13 +140,25 @@ export function handleDisconnect(
   }
 }
 
-export function updateVideoState(roomId: string, patch: Partial<VideoState>): VideoState | null {
+/**
+ * Apply a host intent and return the new authoritative state.
+ * `position` defaults to the position the room would be at right now
+ * (so a bare pause/play intent without a position is still coherent).
+ */
+export function applyPlaybackIntent(
+  roomId: string,
+  intent: { url?: string | null; isPlaying?: boolean; position?: number },
+): PlaybackState | null {
   const room = getRoom(roomId)
   if (!room) return null
-  const current = roomVideoState(room)
-  const next: VideoState = { ...current, ...patch }
-  setRoomVideoState(roomId, next)
-  return next
+  const current = roomPlaybackState(room)
+  const next = {
+    url: intent.url !== undefined ? intent.url : current.url,
+    isPlaying: intent.isPlaying !== undefined ? intent.isPlaying : current.isPlaying,
+    position: intent.position !== undefined ? intent.position : targetPosition(current, Date.now()),
+  }
+  setRoomPlayback(roomId, next)
+  return roomPlaybackState(getRoom(roomId)!)
 }
 
 export function isHost(roomId: string, userId: string): boolean {
