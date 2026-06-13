@@ -161,13 +161,14 @@ app.get('/api/groups/:id/messages', authenticateToken, requireAccount, (req, res
 })
 
 // ---- Stats / profiles / leaderboards ----
-app.get('/api/users/:id/profile', authenticateToken, requireAccount, (req, res) => {
+// Profiles and the leaderboard are public read-only views — guests can see them.
+app.get('/api/users/:id/profile', authenticateToken, (req, res) => {
   const profile = getProfile(req.params.id)
   if (!profile) return res.status(404).json({ message: 'User not found' })
   res.json(profile)
 })
 
-app.get('/api/leaderboard', authenticateToken, requireAccount, (_req, res) => {
+app.get('/api/leaderboard', authenticateToken, (_req, res) => {
   res.json({
     messages: topUsers('messages_sent', 10),
     parties: topUsers('parties_started', 10),
