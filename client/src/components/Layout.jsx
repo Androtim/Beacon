@@ -3,7 +3,7 @@ import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
 import { useRecentRooms } from '../hooks/useRecentRooms'
 import { useTransfers } from '../context/TransfersContext'
-import { Sun, Moon, Gem, Settings, LogOut, Tv, FolderOpen, MessageSquare, PanelLeftClose, PanelLeft, X, ArrowUpDown } from 'lucide-react'
+import { Sun, Moon, Gem, Settings, LogOut, LogIn, Tv, FolderOpen, MessageSquare, PanelLeftClose, PanelLeft, X, ArrowUpDown } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 
 const SPACES = [
@@ -160,7 +160,7 @@ export default function Layout({ children }) {
           )}
 
           {/* User + actions */}
-          <div className="mt-auto flex flex-col gap-1 pt-3 border-t" style={{ borderColor: 'var(--border)' }}>
+          <div className="mt-auto flex flex-col gap-1.5 pt-3 border-t" style={{ borderColor: 'var(--border)' }}>
             {user && !collapsed && (
               <Link to="/settings" className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors hover:bg-[rgb(var(--accent-2)/0.1)]">
                 <div className="w-8 h-8 rounded-full grid place-items-center text-xs font-bold shrink-0"
@@ -173,12 +173,22 @@ export default function Layout({ children }) {
                 </div>
               </Link>
             )}
+
+            {/* Guests get a clear way to sign in / create an account. */}
+            {user?.isGuest && (
+              collapsed ? (
+                <Link to="/login" className="nav-item justify-center !px-0" title="Sign in or create an account" data-testid="rail-signin"><LogIn size={17} /></Link>
+              ) : (
+                <Link to="/login" className="btn btn-primary h-9 text-[11px] mx-1" data-testid="rail-signin"><LogIn size={14} /> Sign in / Sign up</Link>
+              )
+            )}
+
             <div className={`flex items-center gap-1 px-1 ${collapsed ? 'flex-col' : ''}`}>
               <Link to="/settings" className="nav-item flex-1 justify-center !px-0" title="Settings"><Settings size={17} /></Link>
               <button onClick={toggleTheme} className="nav-item flex-1 justify-center !px-0" title="Toggle theme">
                 {mode === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
               </button>
-              {user && (
+              {user && !user.isGuest && (
                 <button onClick={logout} className="nav-item flex-1 justify-center !px-0 hover:!bg-rose-500/10 hover:!text-rose-400" title="Sign out">
                   <LogOut size={17} />
                 </button>
