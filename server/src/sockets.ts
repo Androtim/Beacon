@@ -194,7 +194,17 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
       return onlineUsers.get(to)?.socketId ?? null
     }
     on('dm-file-offer', ({ to, transferId, fileInfo }) => {
-      const sid = dmRecipientSocket(to)
+      if (isGuest) return
+      const recipient = findUserById(to)
+      if (!recipient || recipient.is_guest) return
+      // Persist as a typed message so the offer is visible whenever they open
+      // the chat — even if they were offline or elsewhere when it was sent.
+      try {
+        createMessage(userId, to, `📎 ${fileInfo.name}`, Date.now(), 'file-offer', { transferId, fileInfo })
+      } catch (e) {
+        console.error('Failed to persist file offer:', e)
+      }
+      const sid = onlineUsers.get(to)?.socketId
       if (sid) io.to(sid).emit('dm-file-offer', { from: userId, fromUsername: username, transferId, fileInfo })
     })
     on('dm-file-request', ({ to, transferId }) => {
@@ -210,7 +220,17 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
       if (sid) io.to(sid).emit('dm-file-signal', { from: userId, signal })
     })
     on('dm-party-invite', ({ to, roomId }) => {
-      const sid = dmRecipientSocket(to)
+      if (isGuest) return
+      const recipient = findUserById(to)
+      if (!recipient || recipient.is_guest) return
+      // Persist so the invite survives offline/late opens. The roomId is stable,
+      // so the Join card works any time after — not just while both are online.
+      try {
+        createMessage(userId, to, '📺 Watch party', Date.now(), 'party-invite', { roomId })
+      } catch (e) {
+        console.error('Failed to persist party invite:', e)
+      }
+      const sid = onlineUsers.get(to)?.socketId
       if (sid) io.to(sid).emit('dm-party-invite', { from: userId, fromUsername: username, roomId })
     })
 

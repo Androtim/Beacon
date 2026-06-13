@@ -87,6 +87,17 @@ export function useDmFiles({ socket, me }) {
     socket.emit('dm-file-request', { to: t.peerId, transferId })
   }, [transfers, receiveFrom, socket, patch])
 
+  // Seed transfers from persisted file-offer messages (history). Only adds
+  // offers we don't already track, so a live transfer's progress is never
+  // clobbered by a stale persisted copy.
+  const hydrate = useCallback((seed) => {
+    setTransfers((ts) => {
+      const have = new Set(ts.map((t) => t.id))
+      const add = seed.filter((s) => !have.has(s.id))
+      return add.length ? [...ts, ...add] : ts
+    })
+  }, [])
+
   const declineFile = useCallback((transferId) => {
     const t = transfers.find((x) => x.id === transferId)
     if (t) socket.emit('dm-file-decline', { to: t.peerId, transferId })
@@ -95,5 +106,5 @@ export function useDmFiles({ socket, me }) {
 
   useEffect(() => cancelAll, [cancelAll])
 
-  return { transfers, sendFile, acceptFile, declineFile }
+  return { transfers, sendFile, acceptFile, declineFile, hydrate }
 }

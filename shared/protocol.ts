@@ -193,5 +193,9 @@ export interface MessagesResponse {
     message: string
     timestamp: number
     read: boolean
+    // 'text' for ordinary DMs; 'party-invite' / 'file-offer' carry their
+    // structured payload in `meta` and render as action cards in the chat.
+    kind: string
+    meta?: Record<string, unknown>
   }>
 }
