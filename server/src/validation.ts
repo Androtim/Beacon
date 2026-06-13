@@ -50,6 +50,14 @@ export const schemas = {
   'dm-file-decline': z.object({ to: z.string().min(1).max(64), transferId: z.string().min(1).max(64) }),
   'dm-file-signal': z.object({ to: z.string().min(1).max(64), signal: signalPayload }),
   'dm-party-invite': z.object({ to: z.string().min(1).max(64), roomId }),
+  'group-message': z.object({
+    groupId: z.string().min(1).max(64),
+    // Envelope map for a group can be large (one ciphertext per member).
+    body: z.string().min(1).max(200_000),
+    timestamp: z.number().optional(),
+    kind: z.string().max(32).optional(),
+    meta: z.record(z.string(), z.unknown()).optional(),
+  }),
   'file-share-create': z.object({
     code: z.string().regex(/^[A-Za-z0-9]{4,16}$/),
     files: z.array(fileInfo).min(1).max(100),

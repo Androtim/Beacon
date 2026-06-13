@@ -101,6 +101,16 @@ export interface ClientToServerEvents {
   'dm-file-signal': (data: { to: string; signal: SignalPayload }) => void
   'dm-party-invite': (data: { to: string; roomId: string }) => void
 
+  // Group DMs. body is an opaque per-member envelope map for text; for
+  // 'party-invite'/'file-offer' kinds the payload rides in meta.
+  'group-message': (data: {
+    groupId: string
+    body: string
+    timestamp: number
+    kind?: string
+    meta?: Record<string, unknown>
+  }) => void
+
   'file-share-create': (data: { code: string; files: FileInfo[] }) => void
   'file-share-join': (data: { code: string }) => void
   'file-share-request': (data: { to: string }) => void
@@ -148,6 +158,18 @@ export interface ServerToClientEvents {
   'dm-file-decline': (data: { from: string; transferId: string }) => void
   'dm-file-signal': (data: { from: string; signal: SignalPayload }) => void
   'dm-party-invite': (data: { from: string; fromUsername: string; roomId: string }) => void
+  // Group DMs: a new message in a group the recipient belongs to, and a
+  // notification that they've been added to a freshly created group.
+  'group-message': (data: {
+    groupId: string
+    id: string
+    from: { id: string; username: string }
+    body: string
+    timestamp: number
+    kind: string
+    meta?: Record<string, unknown>
+  }) => void
+  'group-created': (data: { group: GroupSummary }) => void
   'user-online': (data: { id: string; username: string }) => void
   'user-offline': (userId: string) => void
 
@@ -183,6 +205,36 @@ export interface ConversationSummary {
   user: { id: string; username: string; publicKey?: string }
   lastMessage: { message: string; timestamp: number }
   unreadCount: number
+}
+
+// ---------- Group DMs ----------
+
+export interface GroupMember {
+  id: string
+  username: string
+  publicKey?: string
+}
+
+export interface GroupSummary {
+  id: string
+  name: string
+  members: GroupMember[]
+  // We never decrypt on the server, so the preview is just metadata.
+  lastMessage: { from: string; timestamp: number; kind: string } | null
+}
+
+export interface GroupMessagesResponse {
+  group: GroupSummary
+  messages: Array<{
+    id: string
+    from: { id: string; username: string }
+    // For text: a per-member envelope map JSON ({ userId: envelope }).
+    // For invite/offer kinds: a plaintext label; payload is in `meta`.
+    body: string
+    timestamp: number
+    kind: string
+    meta?: Record<string, unknown>
+  }>
 }
 
 export interface MessagesResponse {

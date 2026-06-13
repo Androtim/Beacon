@@ -4,7 +4,10 @@ import { randomUUID } from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import type { PublicUser, ConversationSummary, MessagesResponse, PlaybackState } from '../../shared/protocol.js'
+import type {
+  PublicUser, ConversationSummary, MessagesResponse, PlaybackState,
+  GroupSummary, GroupMessagesResponse,
+} from '../../shared/protocol.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -85,6 +88,34 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE messages ADD COLUMN kind TEXT NOT NULL DEFAULT 'text';
   ALTER TABLE messages ADD COLUMN meta TEXT;
+  `,
+  // v5: group DMs. A group message body is an opaque per-member envelope map
+  // ({ userId: ciphertext }) so the server stays zero-knowledge — same E2E
+  // guarantee as 1:1 DMs, just encrypted once per recipient.
+  `
+  CREATE TABLE groups (
+    id         TEXT PRIMARY KEY,
+    name       TEXT NOT NULL,
+    created_by TEXT NOT NULL REFERENCES users(id),
+    created_at INTEGER NOT NULL
+  );
+  CREATE TABLE group_members (
+    group_id  TEXT NOT NULL REFERENCES groups(id),
+    user_id   TEXT NOT NULL REFERENCES users(id),
+    joined_at INTEGER NOT NULL,
+    PRIMARY KEY (group_id, user_id)
+  );
+  CREATE INDEX idx_group_members_user ON group_members (user_id);
+  CREATE TABLE group_messages (
+    id        TEXT PRIMARY KEY,
+    group_id  TEXT NOT NULL REFERENCES groups(id),
+    from_id   TEXT NOT NULL REFERENCES users(id),
+    body      TEXT NOT NULL,
+    timestamp INTEGER NOT NULL,
+    kind      TEXT NOT NULL DEFAULT 'text',
+    meta      TEXT
+  );
+  CREATE INDEX idx_group_messages ON group_messages (group_id, timestamp);
   `,
 ]
 
@@ -363,6 +394,144 @@ export function getConversations(meId: string): ConversationSummary[] {
       unreadCount: unread,
     }]
   })
+}
+
+// ---------- Groups ----------
+
+export interface GroupRow {
+  id: string
+  name: string
+  created_by: string
+  created_at: number
+}
+
+interface GroupMessageRow {
+  id: string
+  group_id: string
+  from_id: string
+  body: string
+  timestamp: number
+  kind: string
+  meta: string | null
+}
+
+const insertGroup = db.prepare(`INSERT INTO groups (id, name, created_by, created_at) VALUES (?, ?, ?, ?)`)
+const insertGroupMember = db.prepare(
+  `INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)`
+)
+const selectGroupById = db.prepare(`SELECT * FROM groups WHERE id = ?`)
+const selectGroupMemberIds = db.prepare(`SELECT user_id FROM group_members WHERE group_id = ?`)
+const selectGroupsForUser = db.prepare(
+  `SELECT g.* FROM groups g
+   JOIN group_members gm ON gm.group_id = g.id
+   WHERE gm.user_id = ?
+   ORDER BY g.created_at DESC`
+)
+const isMemberStmt = db.prepare(`SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?`)
+const insertGroupMessage = db.prepare(
+  `INSERT INTO group_messages (id, group_id, from_id, body, timestamp, kind, meta) VALUES (?, ?, ?, ?, ?, ?, ?)`
+)
+const selectGroupMessages = db.prepare(
+  `SELECT * FROM group_messages WHERE group_id = ? ORDER BY timestamp ASC LIMIT 200`
+)
+const selectLastGroupMessage = db.prepare(
+  `SELECT * FROM group_messages WHERE group_id = ? ORDER BY timestamp DESC LIMIT 1`
+)
+
+function groupMembers(groupId: string): PublicUser[] {
+  const ids = (selectGroupMemberIds.all(groupId) as { user_id: string }[]).map((r) => r.user_id)
+  return ids.flatMap((id) => {
+    const u = findUserById(id)
+    return u ? [toPublicUser(u)] : []
+  })
+}
+
+function groupSummary(row: GroupRow): GroupSummary {
+  const last = selectLastGroupMessage.get(row.id) as GroupMessageRow | undefined
+  return {
+    id: row.id,
+    name: row.name,
+    members: groupMembers(row.id).map((m) => ({ id: m.id, username: m.username, publicKey: m.publicKey })),
+    lastMessage: last ? { from: last.from_id, timestamp: last.timestamp, kind: last.kind } : null,
+  }
+}
+
+export function isGroupMember(groupId: string, userId: string): boolean {
+  return !!isMemberStmt.get(groupId, userId)
+}
+
+/** Member ids for fan-out (raw, not PublicUser). */
+export function groupMemberIds(groupId: string): string[] {
+  return (selectGroupMemberIds.all(groupId) as { user_id: string }[]).map((r) => r.user_id)
+}
+
+export function createGroup(name: string, creatorId: string, memberIds: string[]): GroupSummary {
+  const id = randomUUID()
+  const now = Date.now()
+  const create = db.transaction(() => {
+    insertGroup.run(id, name.trim() || 'Group', creatorId, now)
+    // Creator is always a member; ignore any member id that isn't a real account.
+    const ids = new Set([creatorId, ...memberIds])
+    for (const uid of ids) {
+      const u = findUserById(uid)
+      if (u && !u.is_guest) insertGroupMember.run(id, uid, now)
+    }
+  })
+  create()
+  return groupSummary(selectGroupById.get(id) as GroupRow)
+}
+
+export function getGroup(groupId: string): GroupSummary | null {
+  const row = selectGroupById.get(groupId) as GroupRow | undefined
+  return row ? groupSummary(row) : null
+}
+
+export function getGroupsForUser(userId: string): GroupSummary[] {
+  const rows = selectGroupsForUser.all(userId) as GroupRow[]
+  return rows.map(groupSummary)
+}
+
+export function createGroupMessage(
+  groupId: string,
+  fromId: string,
+  body: string,
+  timestamp: number,
+  kind: string = 'text',
+  meta: Record<string, unknown> | null = null,
+): GroupMessagesResponse['messages'][number] {
+  const id = randomUUID()
+  const metaStr = meta ? JSON.stringify(meta) : null
+  insertGroupMessage.run(id, groupId, fromId, body, timestamp, kind, metaStr)
+  const u = findUserById(fromId)
+  return {
+    id,
+    from: { id: fromId, username: u?.username ?? 'unknown' },
+    body,
+    timestamp,
+    kind,
+    meta: meta ?? undefined,
+  }
+}
+
+export function getGroupMessages(groupId: string): GroupMessagesResponse['messages'] {
+  const rows = selectGroupMessages.all(groupId) as GroupMessageRow[]
+  const cache = new Map<string, string>()
+  const name = (id: string) => {
+    let n = cache.get(id)
+    if (!n) {
+      n = findUserById(id)?.username ?? 'unknown'
+      cache.set(id, n)
+    }
+    return n
+  }
+  return rows.map((r) => ({
+    id: r.id,
+    from: { id: r.from_id, username: name(r.from_id) },
+    body: r.body,
+    timestamp: r.timestamp,
+    kind: r.kind ?? 'text',
+    meta: r.meta ? (JSON.parse(r.meta) as Record<string, unknown>) : undefined,
+  }))
 }
 
 export default db
