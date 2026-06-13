@@ -22,14 +22,14 @@ async function fetchIceServers() {
  * transfer protocol + socket signaling. Used by both the share-code flow
  * (signalEvent 'file-share-signal') and watch parties ('video-file-signal').
  */
-export function useFileTransfer({ socket, signalEvent, onFileReceived, onAllReceived, selfId }) {
+export function useFileTransfer({ socket, signalEvent, onFileReceived, onAllReceived, onUploadProgress, selfId }) {
   const [status, setStatus] = useState('idle') // idle|connecting|transferring|complete|error
   const [uploadProgress, setUploadProgress] = useState({})
   const [downloadProgress, setDownloadProgress] = useState({})
 
   const peersRef = useRef(new Map()) // remote socketId -> {peer, sender?, receiver?, watchdog?}
-  const callbacksRef = useRef({ onFileReceived, onAllReceived })
-  callbacksRef.current = { onFileReceived, onAllReceived }
+  const callbacksRef = useRef({ onFileReceived, onAllReceived, onUploadProgress })
+  callbacksRef.current = { onFileReceived, onAllReceived, onUploadProgress }
 
   // If a connection doesn't establish within this window, stop waiting and
   // surface an error instead of spinning forever (failed NAT traversal, a TURN
@@ -122,6 +122,9 @@ export function useFileTransfer({ socket, signalEvent, onFileReceived, onAllRece
         setStatus('transferring')
         const name = files[fileIndex]?.name ?? String(fileIndex)
         setUploadProgress((prev) => (prev[name] === percent ? prev : { ...prev, [name]: percent }))
+        // Per-peer hook so a sharer serving many peers can track each one
+        // (uploadProgress alone is keyed by file name and would collide).
+        callbacksRef.current.onUploadProgress?.({ peerId, transferId, percent })
       },
       onComplete: () => setStatus('complete'),
       onError: (err) => {
