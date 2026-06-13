@@ -2,17 +2,26 @@
 # for the domain below — just replace it with your real (sub)domain.
 #
 # Put this at /etc/caddy/Caddyfile, then: sudo systemctl reload caddy
+#
+# NOTE: the API/socket routes live in their own `handle` blocks so the SPA's
+# try_files fallback can't rewrite them to index.html (which would make the
+# API answer POSTs with 405 Method Not Allowed).
 
 beacon.example.com {
 	encode zstd gzip
 
 	# API + Socket.io (WebSocket signaling) → the Node backend.
-	# Caddy handles the WebSocket Upgrade automatically.
-	@backend path /api/* /socket.io/*
-	reverse_proxy @backend 127.0.0.1:3001
+	handle /api/* {
+		reverse_proxy 127.0.0.1:3001
+	}
+	handle /socket.io/* {
+		reverse_proxy 127.0.0.1:3001
+	}
 
-	# Everything else is the built single-page app.
-	root * /opt/beacon/client/dist
-	try_files {path} /index.html
-	file_server
+	# Everything else: the built single-page app, with SPA fallback.
+	handle {
+		root * /opt/beacon/client/dist
+		try_files {path} /index.html
+		file_server
+	}
 }
