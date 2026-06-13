@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPeer, isPolite } from '../lib/p2p/peer'
 import { createSender, createReceiver } from '../lib/p2p/transfer'
+import { serveFileOverChannel, createStreamUrl } from '../lib/p2p/streaming'
 
 let iceServersCache = null
 async function fetchIceServers() {
@@ -35,6 +36,8 @@ export function useFileTransfer({ socket, signalEvent, onFileReceived, onAllRece
     if (!entry) return
     entry.sender?.stop()
     entry.receiver?.stop()
+    entry.server?.stop()
+    entry.stream?.destroy()
     entry.peer.close()
     peersRef.current.delete(peerId)
     if (peersRef.current.size === 0) setStatus((s) => (s === 'complete' ? s : 'idle'))
@@ -130,6 +133,44 @@ export function useFileTransfer({ socket, signalEvent, onFileReceived, onAllRece
     peersRef.current.set(peerId, { peer })
   }, [socket, signalEvent, teardownPeer])
 
+  /** Host side (streaming): answer byte-range requests from a local file. */
+  const serveTo = useCallback(async (peerId, file) => {
+    teardownPeer(peerId)
+    setStatus('connecting')
+    const peer = await buildPeer(peerId)
+    const channel = peer.createDataChannel('stream', { ordered: true })
+    const server = serveFileOverChannel(channel, file)
+    channel.onopen = () => setStatus('streaming')
+    peersRef.current.set(peerId, { peer, server })
+  }, [socket, signalEvent, teardownPeer])
+
+  /**
+   * Receiver side (streaming): await the host's 'stream' channel, bridge it to
+   * the service worker, and hand back a playable URL via `onUrl`.
+   */
+  const streamFrom = useCallback(async (peerId, key, meta, onUrl) => {
+    teardownPeer(peerId)
+    setStatus('connecting')
+    const peer = await buildPeer(peerId)
+    peer.pc.ondatachannel = ({ channel }) => {
+      if (channel.label !== 'stream') return
+      const ready = () => createStreamUrl(channel, key, meta)
+        .then((stream) => {
+          const entry = peersRef.current.get(peerId)
+          if (entry) entry.stream = stream
+          setStatus('streaming')
+          onUrl(stream.url)
+        })
+        .catch((err) => {
+          console.error('stream setup failed:', err)
+          setStatus('error')
+        })
+      if (channel.readyState === 'open') ready()
+      else channel.onopen = ready
+    }
+    peersRef.current.set(peerId, { peer })
+  }, [socket, signalEvent, teardownPeer])
+
   return {
     status,
     setStatus,
@@ -137,6 +178,8 @@ export function useFileTransfer({ socket, signalEvent, onFileReceived, onAllRece
     downloadProgress,
     sendTo,
     receiveFrom,
+    serveTo,
+    streamFrom,
     cancelAll,
   }
 }

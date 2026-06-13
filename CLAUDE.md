@@ -57,8 +57,13 @@ validated by the owner — do not re-litigate:
   delivery / 30-day TTL).
 - UI overhaul is deliberately LAST — don't polish UI before the core works.
 
-Phases: 0 foundation (TS+SQLite) ✅ → 1 guest identity + persistent rooms/sessions
-→ 2 sync engine → 3 P2P engine → 4 voice + E2E DMs → 5 UI/PWA.
+Phases: 0 foundation (TS+SQLite) ✅ → 1 guest identity + persistent rooms ✅
+→ 2 sync engine (clock offset, drift loop, YouTube IFrame API) ✅
+→ 3a P2P engine (perfect negotiation, OPFS streaming, resume) ✅
+→ 3b stream-while-downloading → 4 voice + E2E DMs → 5 UI/PWA.
+All merged phases have Playwright coverage (`npm run test:e2e`, 28 tests):
+real two-browser drift measurement, restart persistence, loopback resume with
+SHA-256 byte-identity, share-code and watch-party transfer e2e.
 
 ### Known-broken (inherited, fixed by phases 1–3)
 

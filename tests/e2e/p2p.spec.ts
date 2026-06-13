@@ -225,19 +225,28 @@ test('watch party: host shares a video file P2P and participant can play it', as
   // Host plays its own copy immediately (blob URL).
   await expect(host.locator('video')).toBeAttached()
 
-  // Participant accepts, receives the file P2P, and gets a playable blob.
+  // Participant accepts and gets a STREAMING source within seconds — bytes
+  // are pulled from the host on demand via the service worker, no full
+  // download before playback.
   await expect(guest.getByTestId('party-accept')).toBeVisible()
   await guest.getByTestId('party-accept').click()
   await expect(guest.getByTestId('party-file-ready')).toBeVisible({ timeout: 30_000 })
   await expect(guest.locator('video')).toBeAttached()
   const src = await guest.locator('video').getAttribute('src')
-  expect(src).toMatch(/^blob:/)
+  expect(src).toMatch(/^\/p2p\//)
 
-  // And the synced playback machinery drives the participant's blob copy.
+  // The streamed source must actually decode: metadata (duration) arrives
+  // over the P2P range protocol.
+  await expect.poll(
+    () => guest.locator('video').evaluate((v: HTMLVideoElement) => v.duration || 0),
+    { timeout: 15_000 },
+  ).toBeGreaterThan(25) // the sample is ~30s
+
+  // And the synced playback machinery drives the participant's streamed copy.
   await host.locator('video').evaluate((v: HTMLVideoElement) => v.play())
   await expect.poll(
-    () => guest.locator('video').evaluate((v: HTMLVideoElement) => !v.paused),
-    { timeout: 10_000 },
+    () => guest.locator('video').evaluate((v: HTMLVideoElement) => !v.paused && v.currentTime > 0.2),
+    { timeout: 15_000 },
   ).toBe(true)
 
   await ctxA.close()
