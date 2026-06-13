@@ -66,19 +66,48 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'Server is running!', database: 'SQLite', timestamp: new Date().toISOString() })
 })
 
-app.get('/api/ice-servers', authenticateToken, (_req, res) => {
-  const iceServers: Array<{ urls: string; username?: string; credential?: string }> = [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-  ]
+type IceServer = { urls: string; username?: string; credential?: string }
+
+// TURN config is resolved once and cached. The client only ever sees the
+// resolved server list (never the API key) via this endpoint.
+let turnCache: { servers: IceServer[]; at: number } | null = null
+const TURN_CACHE_MS = 60 * 60 * 1000 // 1h
+
+async function resolveTurnServers(): Promise<IceServer[]> {
+  // 1. Static single-server config wins if present (self-hosted coturn, etc.).
   if (process.env.TURN_SERVER_URL) {
-    iceServers.push({
+    return [{
       urls: process.env.TURN_SERVER_URL,
       username: process.env.TURN_SERVER_USERNAME,
       credential: process.env.TURN_SERVER_PASSWORD,
-    })
+    }]
   }
-  res.json({ iceServers })
+  // 2. Provider REST API (e.g. Metered) — returns the full server list.
+  const apiUrl = process.env.TURN_CREDENTIAL_API_URL
+  if (!apiUrl) return []
+  if (turnCache && Date.now() - turnCache.at < TURN_CACHE_MS) return turnCache.servers
+  try {
+    const res = await fetch(apiUrl)
+    if (!res.ok) throw new Error(`TURN API responded ${res.status}`)
+    const servers = await res.json()
+    if (Array.isArray(servers)) {
+      turnCache = { servers, at: Date.now() }
+      return servers
+    }
+    return turnCache?.servers ?? []
+  } catch (err) {
+    console.error('Failed to fetch TURN credentials:', err)
+    return turnCache?.servers ?? [] // serve stale on transient failure
+  }
+}
+
+app.get('/api/ice-servers', authenticateToken, async (_req, res) => {
+  const stun: IceServer[] = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ]
+  const turn = await resolveTurnServers()
+  res.json({ iceServers: [...stun, ...turn] })
 })
 
 // DMs need a persistent identity — guests get 403 with a clear message.
