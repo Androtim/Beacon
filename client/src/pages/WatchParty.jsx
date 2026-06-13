@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { useWatchParty } from '../hooks/useWatchParty'
 import VideoFileSharing from '../components/VideoFileSharing'
 import SyncedPlayer from '../components/SyncedPlayer'
+import VoicePanel from '../components/VoicePanel'
 import { ArrowLeft, Send, Users, Video, Link2, Monitor, Info, Film, Radio } from 'lucide-react'
 
 export default function WatchParty() {
@@ -182,6 +183,8 @@ export default function WatchParty() {
               </h3>
               <div className="h-2 w-2 bg-emerald-500 rounded-full animate-pulse" />
             </div>
+
+            <VoicePanel socket={socket} roomId={roomId} />
 
             <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-[var(--bg-secondary)]/30" data-testid="chat-messages">
               {messages.map((msg, i) => (

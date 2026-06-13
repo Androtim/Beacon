@@ -100,6 +100,10 @@ export interface ClientToServerEvents {
   'video-file-ready': (data: { to: string; fileInfo: FileInfo | null }) => void
   'video-file-signal': (data: { to: string; signal: SignalPayload }) => void
   'video-file-cancel': (data: { roomId: string }) => void
+
+  'voice-join': (data: { roomId: string }) => void
+  'voice-leave': (data: { roomId: string }) => void
+  'voice-signal': (data: { to: string; signal: SignalPayload }) => void
 }
 
 // ---------- Socket events: server -> client ----------
@@ -135,6 +139,13 @@ export interface ServerToClientEvents {
   'video-file-ready': (data: { from: string; fileInfo: FileInfo | null }) => void
   'video-file-signal': (data: { from: string; signal: SignalPayload }) => void
   'video-file-cancel': () => void
+
+  // Voice chat: the joiner receives the current members and dials each one;
+  // existing members learn about the newcomer and answer their dials.
+  'voice-members': (data: { members: Array<{ socketId: string; username: string }> }) => void
+  'voice-peer-joined': (data: { socketId: string; username: string }) => void
+  'voice-peer-left': (data: { socketId: string }) => void
+  'voice-signal': (data: { from: string; signal: SignalPayload }) => void
 }
 
 // ---------- REST API shapes ----------

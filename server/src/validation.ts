@@ -56,6 +56,9 @@ export const schemas = {
   'video-file-ready': z.object({ to: socketId, fileInfo: fileInfo.nullable().optional() }),
   'video-file-signal': z.object({ to: socketId, signal: signalPayload }),
   'video-file-cancel': z.object({ roomId }),
+  'voice-join': z.object({ roomId }),
+  'voice-leave': z.object({ roomId }),
+  'voice-signal': z.object({ to: socketId, signal: signalPayload }),
 } as const
 
 export type SchemaMap = typeof schemas
