@@ -3,7 +3,7 @@ import type { Server as HttpServer } from 'http'
 import { randomUUID } from 'crypto'
 import type { z } from 'zod'
 import type { ServerToClientEvents, RoomFileShare, FileInfo } from '../../shared/protocol.js'
-import { findUserById, createMessage, getRoom, isGroupMember, createGroupMessage, groupMemberIds } from './db.js'
+import { findUserById, createMessage, getRoom, isGroupMember, createGroupMessage, groupMemberIds, bumpStat } from './db.js'
 import type { GroupSummary } from '../../shared/protocol.js'
 import { verifyToken } from './middleware.js'
 import { schemas, type SchemaMap } from './validation.js'
@@ -31,6 +31,18 @@ const roomFileShares = new Map<string, RoomFileShare>()
 const onlineUsers = new Map<string, { socketId: string; username: string }>()
 const voiceRooms = new Map<string, Map<string, string>>() // roomId -> socketId -> username
 const streamRequests = new Map<string, { roomId: string; url: string; fromUserId: string }>() // requestId -> request
+// `${socketId}:${roomId}` -> join timestamp, for accruing watch time on leave.
+const roomJoinedAt = new Map<string, number>()
+
+/** Accrue elapsed seconds in a room into the user's watch-time stat. */
+function accrueWatchTime(socketId: string, roomId: string, userId: string): void {
+  const key = `${socketId}:${roomId}`
+  const since = roomJoinedAt.get(key)
+  if (since == null) return
+  roomJoinedAt.delete(key)
+  const seconds = Math.floor((Date.now() - since) / 1000)
+  if (seconds > 0) bumpStat(userId, 'watch_seconds', seconds)
+}
 
 const FILE_SHARE_TTL_MS = 30 * 60 * 1000
 
@@ -114,7 +126,11 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
 
     on('join-room', ({ roomId }) => {
       socket.join(roomId)
+      // A brand-new room means this user just started a watch party.
+      const isNewRoom = !getRoom(roomId)
       const result = rooms.joinRoom(roomId, { id: userId, username }, socket.id)
+      if (isNewRoom && !isGuest) bumpStat(userId, 'parties_started', 1)
+      roomJoinedAt.set(`${socket.id}:${roomId}`, Date.now())
       socket.emit('room-joined', {
         participants: result.participants,
         isHost: result.isHost,
@@ -130,6 +146,7 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
 
     on('leave-room', ({ roomId }) => {
       socket.leave(roomId)
+      if (!isGuest) accrueWatchTime(socket.id, roomId, userId)
       const result = rooms.leaveRoom(roomId, userId)
       if (!result) return
       io.to(roomId).emit('user-left', { participants: result.participants, user: { id: userId, username } })
@@ -197,6 +214,7 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
       if (!rooms.liveParticipant(roomId, userId)) return
       // Identity comes from the authenticated socket, never from the payload.
       io.to(roomId).emit('chat-message', { username, message, timestamp: Date.now() })
+      if (!isGuest) bumpStat(userId, 'messages_sent', 1)
     })
 
     on('private-message', ({ to, message, timestamp }) => {
@@ -211,6 +229,7 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
       }
       const rec = onlineUsers.get(to)
       if (rec) io.to(rec.socketId).emit('private-message', { from: { id: userId, username }, message, timestamp: ts })
+      bumpStat(userId, 'messages_sent', 1)
     })
 
     // ---- File-in-DM (P2P transfer between two accounts, relayed by userId) ----
@@ -286,6 +305,7 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
       // Fan out to every member except the sender (their client echoes locally).
       const recipients = groupMemberIds(groupId).filter((id) => id !== userId)
       emitToUsers(recipients, 'group-message', payload)
+      if (saved.kind === 'text') bumpStat(userId, 'messages_sent', 1)
     })
 
     // Group file transfer handshake (1:1 between sharer and each downloader),
@@ -415,6 +435,7 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
         userId,
         socket.id,
         (roomId, participants) => {
+          if (!isGuest) accrueWatchTime(socket.id, roomId, userId)
           io.to(roomId).emit('user-left', { participants, user: { id: userId, username } })
           const share = roomFileShares.get(roomId)
           if (share?.hostId === socket.id) {

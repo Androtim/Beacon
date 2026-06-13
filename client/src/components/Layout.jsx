@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { useRecentRooms } from '../hooks/useRecentRooms'
 import { useTransfers } from '../context/TransfersContext'
 import Launcher from './Launcher'
-import { Sun, Moon, Gem, Settings, LogOut, LogIn, Home, MessageSquare, PanelLeftClose, PanelLeft, X, ArrowUpDown } from 'lucide-react'
+import { Sun, Moon, Gem, Settings, LogOut, LogIn, Home, MessageSquare, PanelLeftClose, PanelLeft, X, ArrowUpDown, Trophy } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 
 // Watch & Files no longer have their own tabs — they're launched from the
@@ -12,6 +12,7 @@ import { Link, useLocation } from 'react-router-dom'
 const SPACES = [
   { to: '/', label: 'Home', icon: Home, match: (p) => p === '/' },
   { to: '/messages', label: 'Messages', icon: MessageSquare, match: (p) => p.startsWith('/messages') },
+  { to: '/leaderboard', label: 'Leaderboard', icon: Trophy, match: (p) => p.startsWith('/leaderboard') || p.startsWith('/u/') || p.startsWith('/profile') },
 ]
 
 const RAIL_KEY = 'beacon-rail-collapsed'
@@ -170,14 +171,14 @@ export default function Layout({ children }) {
           {/* User + actions */}
           <div className="mt-auto flex flex-col gap-1.5 pt-3 border-t" style={{ borderColor: 'var(--border)' }}>
             {user && !collapsed && (
-              <Link to="/settings" className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors hover:bg-[rgb(var(--accent-2)/0.1)]">
+              <Link to={user.isGuest ? '/settings' : '/profile'} className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors hover:bg-[rgb(var(--accent-2)/0.1)]" title={user.isGuest ? 'Account' : 'Your profile'}>
                 <div className="w-8 h-8 rounded-full grid place-items-center text-xs font-bold shrink-0"
                   style={{ background: 'rgb(var(--accent) / 0.2)', color: 'rgb(var(--accent))' }}>
                   {(user.username ?? '?').slice(0, 2).toUpperCase()}
                 </div>
                 <div className="min-w-0">
                   <div className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>{user.username}</div>
-                  <div className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>{user.isGuest ? 'Guest' : 'Account'}</div>
+                  <div className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>{user.isGuest ? 'Guest' : 'View profile'}</div>
                 </div>
               </Link>
             )}
@@ -224,8 +225,8 @@ export default function Layout({ children }) {
         <main className="flex-1 w-full relative pt-14 pb-20 md:pt-0 md:pb-0 min-w-0">{children}</main>
 
         {/* Mobile bottom tabs */}
-        <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 h-16 grid grid-cols-2 backdrop-blur-xl border-t"
-          style={{ background: 'var(--glass-bg)', borderColor: 'var(--border)' }}>
+        <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 h-16 grid backdrop-blur-xl border-t"
+          style={{ background: 'var(--glass-bg)', borderColor: 'var(--border)', gridTemplateColumns: `repeat(${SPACES.length}, minmax(0, 1fr))` }}>
           {SPACES.map(({ to, label, icon: Icon, match }) => (
             <Link key={to} to={to} className="flex flex-col items-center justify-center gap-1 transition-colors"
               style={{ color: match(path) ? 'rgb(var(--accent))' : 'var(--text-secondary)' }}>

@@ -8,6 +8,7 @@ import { authenticateToken, requireAccount } from './middleware.js'
 import {
   getMessagesBetween, getConversations, searchUsers,
   createGroup, getGroupsForUser, getGroup, getGroupMessages, isGroupMember,
+  getProfile, topUsers,
 } from './db.js'
 import initSocket, { notifyGroupCreated } from './sockets.js'
 
@@ -157,6 +158,21 @@ app.get('/api/groups/:id/messages', authenticateToken, requireAccount, (req, res
   const group = getGroup(groupId)
   if (!group) return res.status(404).json({ message: 'Group not found' })
   res.json({ group, messages: getGroupMessages(groupId) })
+})
+
+// ---- Stats / profiles / leaderboards ----
+app.get('/api/users/:id/profile', authenticateToken, requireAccount, (req, res) => {
+  const profile = getProfile(req.params.id)
+  if (!profile) return res.status(404).json({ message: 'User not found' })
+  res.json(profile)
+})
+
+app.get('/api/leaderboard', authenticateToken, requireAccount, (_req, res) => {
+  res.json({
+    messages: topUsers('messages_sent', 10),
+    parties: topUsers('parties_started', 10),
+    watchTime: topUsers('watch_seconds', 10),
+  })
 })
 
 initSocket(server, allowOrigin)
