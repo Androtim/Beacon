@@ -1,9 +1,9 @@
-import { useSocket } from '../hooks/useSocket'
 import FileShare from '../components/FileShare'
 
 // The Files space — its own world, separate from watching and messaging.
+// Transfer state lives in TransfersContext (app-level), so a transfer keeps
+// running and stays in the sidebar even if you navigate away from here.
 export default function Files() {
-  const socket = useSocket()
   return (
     <div className="max-w-[760px] mx-auto px-5 sm:px-8 py-10 sm:py-14">
       <header className="mb-8">
@@ -14,7 +14,7 @@ export default function Files() {
           Files stream directly browser-to-browser — nothing is stored on a server, and interrupted transfers pick up where they left off.
         </p>
       </header>
-      <FileShare socket={socket} />
+      <FileShare />
     </div>
   )
 }

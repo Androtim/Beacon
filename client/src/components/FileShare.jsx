@@ -1,153 +1,28 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef } from 'react'
 import { Upload, Download, Copy, Check, X, FileIcon, Share2, ShieldCheck, Zap, AlertCircle } from 'lucide-react'
-import { useFileTransfer } from '../hooks/useFileTransfer'
-import { cleanupTransfer } from '../lib/p2p/transfer'
-import JSZip from 'jszip'
+import { useTransfers } from '../context/TransfersContext'
 import { motion, AnimatePresence } from 'framer-motion'
 
-export default function FileShare({ socket }) {
-  const [mode, setMode] = useState('idle') // idle, sharing, receiving
-  const [shareCode, setShareCode] = useState('')
+// Thin view onto the app-level TransfersContext, so the transfer keeps running
+// even when you leave this page (it's surfaced live in the sidebar).
+export default function FileShare() {
   const [inputCode, setInputCode] = useState('')
-  const [selectedFiles, setSelectedFiles] = useState([])
   const [copied, setCopied] = useState(false)
-
-  const [pendingFiles, setPendingFiles] = useState([])
-  const [hostId, setHostId] = useState(null)
-  const [joinError, setJoinError] = useState('')
-  const [receiverPhase, setReceiverPhase] = useState('connecting') // connecting|ready (pre-transfer UI)
-
   const fileInputRef = useRef(null)
-  const filesRef = useRef([])
-  const receivedFilesRef = useRef([])
-  const shareCodeRef = useRef('')
-  shareCodeRef.current = shareCode
-
-  const formatFileSize = useCallback((bytes) => {
-    if (bytes === 0) return '0 Bytes'
-    const k = 1024, sizes = ['Bytes', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-  }, [])
-
-  // Save everything once the transfer finishes (zip when multiple files),
-  // then clear the resumable partials from disk.
-  const handleAllReceived = useCallback(async () => {
-    const received = receivedFilesRef.current
-    const save = (blob, name) => {
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = name
-      a.click()
-      setTimeout(() => URL.revokeObjectURL(url), 60_000)
-    }
-    if (received.length > 1) {
-      const zip = new JSZip()
-      received.forEach(({ file }) => zip.file(file.name, file))
-      save(await zip.generateAsync({ type: 'blob' }), `beacon_files_${shareCodeRef.current || 'shared'}.zip`)
-    } else if (received.length === 1) {
-      save(received[0].file, received[0].file.name)
-    }
-    // OPFS partials are cleared on "Done" (cancelTransfer), not
-    // here — the blob being downloaded still references the OPFS bytes.
-  }, [])
 
   const {
-    status, uploadProgress, downloadProgress, sendTo, receiveFrom, cancelAll,
-  } = useFileTransfer({
-    socket,
-    signalEvent: 'file-share-signal',
-    onFileReceived: (file, meta) => { receivedFilesRef.current.push({ file, meta }) },
-    onAllReceived: handleAllReceived,
-  })
-
-  const cancelTransfer = useCallback(() => {
-    cancelAll()
-    if (socket && shareCodeRef.current && mode === 'sharing') {
-      socket.emit('file-share-cancel', { code: shareCodeRef.current })
-    }
-    if (shareCodeRef.current) cleanupTransfer(shareCodeRef.current)
-    setMode('idle')
-    setShareCode('')
-    setInputCode('')
-    setSelectedFiles([])
-    setPendingFiles([])
-    setHostId(null)
-    setJoinError('')
-    receivedFilesRef.current = []
-  }, [socket, mode, cancelAll])
+    mode, shareCode, selectedFiles, pendingFiles, joinError,
+    uploadProgress, downloadProgress, receiverStatus, formatFileSize,
+    createShare, joinShare, startDownload, cancel: cancelTransfer,
+  } = useTransfers()
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files)
-    if (files.length === 0) return
-
-    setSelectedFiles(files)
-    filesRef.current = files
-
-    const code = Math.random().toString(36).substring(2, 10).toUpperCase()
-    setShareCode(code)
-    setMode('sharing')
-
-    socket.emit('file-share-create', {
-      code,
-      files: files.map((f) => ({ name: f.name, size: f.size, type: f.type })),
-    })
+    if (files.length) createShare(files)
     e.target.value = null
   }
-
-  const joinFileShare = () => {
-    if (inputCode.trim().length !== 8) return
-    const code = inputCode.trim().toUpperCase()
-    setShareCode(code)
-    setMode('receiving')
-    setReceiverPhase('connecting')
-    setJoinError('')
-    receivedFilesRef.current = []
-    socket.emit('file-share-join', { code })
-  }
-
-  const handleStartDownload = async () => {
-    if (!hostId) return
-    // Prepare to answer the host's dial, then ask the host to start. The
-    // transfer protocol resumes automatically from any partial on disk.
-    await receiveFrom(hostId, shareCodeRef.current)
-    socket.emit('file-share-request', { to: hostId })
-  }
-
-  useEffect(() => {
-    if (!socket) return
-
-    const onInfo = (data) => {
-      setPendingFiles(data.files)
-      setHostId(data.hostId)
-      setReceiverPhase('ready')
-    }
-    const onShareError = (data) => {
-      setJoinError(data.message)
-      setReceiverPhase('error')
-    }
-    // Host: a receiver asked for the files — dial them and stream.
-    const onRequest = (data) => {
-      if (filesRef.current.length > 0) sendTo(data.from, filesRef.current, shareCodeRef.current)
-    }
-
-    socket.on('file-share-info', onInfo)
-    socket.on('file-share-error', onShareError)
-    socket.on('file-share-request', onRequest)
-    return () => {
-      socket.off('file-share-info', onInfo)
-      socket.off('file-share-error', onShareError)
-      socket.off('file-share-request', onRequest)
-    }
-  }, [socket, sendTo])
-
-  // What the receiver pane should show right now.
-  const receiverStatus = receiverPhase === 'error' ? 'error'
-    : status === 'error' ? 'error' // connection failed/timed out — don't spin forever
-    : status === 'transferring' ? 'transferring'
-    : status === 'complete' ? 'complete'
-    : receiverPhase // connecting | ready
+  const joinFileShare = () => joinShare(inputCode.trim().toUpperCase())
+  const handleStartDownload = () => startDownload()
 
   return (
     <div className="flex flex-col gap-6 max-w-xl mx-auto py-4 font-sans">

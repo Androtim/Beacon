@@ -2,6 +2,7 @@ import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { SocketProvider } from './context/SocketContext'
+import { TransfersProvider } from './context/TransfersContext'
 import { ThemeProvider } from './context/ThemeContext'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
@@ -76,6 +77,7 @@ function App() {
       <ThemeProvider>
         <AuthProvider>
           <SocketProvider>
+          <TransfersProvider>
           <ThemeReset />
           <Router>
             <Layout>
@@ -110,6 +112,7 @@ function App() {
               </Routes>
             </Layout>
         </Router>
+          </TransfersProvider>
           </SocketProvider>
       </AuthProvider>
     </ThemeProvider>
