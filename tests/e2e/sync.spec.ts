@@ -94,13 +94,18 @@ test.describe('video synchronization', () => {
     await ctxC.close()
   })
 
-  test('non-host play attempts are overruled by the room state', async () => {
-    await host.locator('video').evaluate((v: HTMLVideoElement) => v.pause())
-    await expect.poll(() => videoPaused(guest), { timeout: 10_000 }).toBe(true)
+  test('playback control is shared: a non-host pause propagates to everyone', async () => {
+    // Make sure both are playing first.
+    await host.locator('video').evaluate((v: HTMLVideoElement) => v.play())
+    await expect.poll(() => videoPaused(guest), { timeout: 10_000 }).toBe(false)
 
-    // Guest tries to play; they are not the host, so the engine pulls them back.
+    // The GUEST (non-host) pauses — it must propagate to the host too.
+    await guest.locator('video').evaluate((v: HTMLVideoElement) => v.pause())
+    await expect.poll(() => videoPaused(host), { timeout: 10_000 }).toBe(true)
+    expect(await videoPaused(guest)).toBe(true)
+
+    // And the guest can resume for everyone.
     await guest.locator('video').evaluate((v: HTMLVideoElement) => v.play())
-    await expect.poll(() => videoPaused(guest), { timeout: 10_000 }).toBe(true)
-    expect(await videoPaused(host)).toBe(true)
+    await expect.poll(() => videoPaused(host), { timeout: 10_000 }).toBe(false)
   })
 })

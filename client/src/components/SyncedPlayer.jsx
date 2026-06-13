@@ -24,16 +24,16 @@ export default function SyncedPlayer({ src, playback, serverNow, isHost, onInten
   const ytVideoId = src ? getYouTubeVideoId(src) : null
   const mode = ytVideoId ? 'youtube' : src ? 'html5' : 'none'
 
-  // Intents go up only from the host; refs keep callbacks stable.
+  // Playback control is shared — any participant's genuine play/pause/seek
+  // becomes a room intent. (The engine's own corrections are suppressed inside
+  // the adapter, so they never echo back as intents.) refs keep callbacks stable.
   const intentRef = useRef(onIntent)
   intentRef.current = onIntent
-  const isHostRef = useRef(isHost)
-  isHostRef.current = isHost
 
   const adapterCallbacks = {
-    onUserPlay: (t) => { if (isHostRef.current) intentRef.current?.play(t) },
-    onUserPause: (t) => { if (isHostRef.current) intentRef.current?.pause(t) },
-    onUserSeek: (t) => { if (isHostRef.current) intentRef.current?.seek(t) },
+    onUserPlay: (t) => intentRef.current?.play(t),
+    onUserPause: (t) => intentRef.current?.pause(t),
+    onUserSeek: (t) => intentRef.current?.seek(t),
     onAutoplayMuted: () => setNeedsUnmute(true),
   }
   const callbacksRef = useRef(adapterCallbacks)
