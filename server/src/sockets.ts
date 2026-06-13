@@ -27,6 +27,7 @@ interface FileShareSession {
 const fileShares = new Map<string, FileShareSession>()
 const roomFileShares = new Map<string, RoomFileShare>()
 const onlineUsers = new Map<string, { socketId: string; username: string }>()
+const voiceRooms = new Map<string, Map<string, string>>() // roomId -> socketId -> username
 
 const FILE_SHARE_TTL_MS = 30 * 60 * 1000
 
@@ -214,6 +215,38 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
       socket.to(roomId).emit('video-file-cancel')
     })
 
+    // ---- Voice chat ----
+
+    on('voice-join', ({ roomId }) => {
+      if (!rooms.liveParticipant(roomId, userId)) return
+      let members = voiceRooms.get(roomId)
+      if (!members) {
+        members = new Map()
+        voiceRooms.set(roomId, members)
+      }
+      // The joiner dials everyone already in voice.
+      socket.emit('voice-members', {
+        members: [...members.entries()].map(([sid, name]) => ({ socketId: sid, username: name })),
+      })
+      members.set(socket.id, username)
+      socket.to(roomId).emit('voice-peer-joined', { socketId: socket.id, username })
+    })
+
+    on('voice-leave', ({ roomId }) => leaveVoice(roomId))
+
+    on('voice-signal', ({ to, signal }) => {
+      if (!rooms.inSameRoom(socket.id, to)) return
+      io.to(to).emit('voice-signal', { from: socket.id, signal })
+    })
+
+    function leaveVoice(roomId: string) {
+      const members = voiceRooms.get(roomId)
+      if (!members?.has(socket.id)) return
+      members.delete(socket.id)
+      if (members.size === 0) voiceRooms.delete(roomId)
+      socket.to(roomId).emit('voice-peer-left', { socketId: socket.id })
+    }
+
     // ---- Disconnect ----
 
     socket.on('disconnect', () => {
@@ -239,6 +272,12 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
       for (const [code, share] of fileShares) {
         if (share.hostSocketId === socket.id) fileShares.delete(code)
         else share.participants.delete(socket.id)
+      }
+      for (const [roomId, members] of voiceRooms) {
+        if (members.delete(socket.id)) {
+          if (members.size === 0) voiceRooms.delete(roomId)
+          socket.to(roomId).emit('voice-peer-left', { socketId: socket.id })
+        }
       }
     })
   })
