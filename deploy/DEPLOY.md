@@ -8,6 +8,10 @@ streaming service worker, and secure WebRTC only work in a secure context.
 
 Legend: 🧑 = only you can do it · 🤖 = doable over SSH.
 
+> **Using Oracle Cloud (Always Free) instead of Hetzner?** Replace section 1 with
+> the [Oracle appendix](#appendix-oracle-cloud-always-free) below, then continue
+> from section 2. Sections 3–9 are identical (just SSH in as `ubuntu` and `sudo`).
+
 ---
 
 ## 1. 🧑 Create the server (Hetzner Cloud)
@@ -149,3 +153,62 @@ sqlite3 /opt/beacon/data/beacon.db ".backup '/opt/beacon/data/backup-$(date +%F)
 ```
 
 (Add to a cron job; copy off-box for safety.)
+
+---
+
+## Appendix: Oracle Cloud (Always Free)
+
+Runs Beacon at **$0/mo**. Use this in place of section 1, then continue from
+section 2 (DNS). Two things trip everyone up: a **dual firewall** (cloud + the
+instance's own iptables) and **ARM capacity**.
+
+### A. 🧑 Account
+
+- Sign up at cloud.oracle.com. A card is required for identity verification —
+  **not charged** while you stay on Always Free shapes.
+- **Home region is permanent** — pick one near you that has ARM (Ampere A1)
+  capacity.
+- **Recommended:** after signup, upgrade the account to **Pay As You Go**. It
+  stays free within Always Free limits but **exempts you from idle-instance
+  reclamation** (Oracle otherwise reclaims low-CPU free instances after ~7 days).
+
+### B. 🧑 Create the instance
+
+- **Image:** Canonical **Ubuntu 24.04** (matches this guide).
+- **Shape:** **VM.Standard.A1.Flex** (ARM), e.g. **2 OCPU / 12 GB** — well within
+  the Always Free cap of 4 OCPU / 24 GB. Node and better-sqlite3 build fine on ARM.
+  - If you hit **"Out of host capacity"** (common for A1), either retry over a few
+    hours / try another Availability Domain, or fall back to **VM.Standard.E2.1.Micro**
+    (x86, 1 OCPU / 1 GB, always available) — but then **add swap** (step D) so the
+    client build doesn't run out of memory.
+- **SSH key:** upload the **public key of the machine running Claude Code**. The
+  login user is **`ubuntu`** (so `ssh ubuntu@<IP>`, then `sudo -i`).
+- **Public IP:** keep the assigned IPv4. Reserve it (Networking → reserved IPs,
+  also free) so it survives stop/start and your DNS never breaks.
+
+### C. 🧑 Open the ports — in BOTH firewalls
+
+1. **Cloud firewall** (VCN → Security Lists, or an NSG): add ingress rules for
+   `0.0.0.0/0` → `80/tcp` and `443/tcp` (22 is already open). Add the TURN ports
+   from section 1 only if self-hosting coturn.
+2. **Instance firewall** — Oracle's Ubuntu image *also* blocks everything but SSH
+   with iptables. Over SSH:
+   ```bash
+   sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
+   sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
+   sudo netfilter-persistent save
+   ```
+   (Skip this and the site is unreachable even with the cloud rule in place.)
+
+### D. 🤖 (E2.1.Micro only) add swap so the build doesn't OOM
+
+```bash
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+### E. Continue from section 2
+
+Do DNS (section 2), then sections 3–9 as written — except SSH in as
+`ssh ubuntu@<IP>` and run `sudo -i` first (the guide's commands assume root).
