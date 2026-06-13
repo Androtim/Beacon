@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../hooks/useSocket'
-import { Send, Search, User, ArrowLeft, MoreVertical } from 'lucide-react'
+import { Send, Search, User, ArrowLeft, MoreVertical, MessageSquare, ShieldAlert } from 'lucide-react'
 import axios from 'axios'
 
 export default function Messages() {
@@ -30,8 +30,8 @@ export default function Messages() {
     if (!socket) return
 
     socket.on('private-message', ({ from, message, timestamp }) => {
-      if (selectedUser && from === selectedUser.id) {
-        setMessages(prev => [...prev, { from: { id: from }, message, timestamp }])
+      if (selectedUser && from.id === selectedUser.id) {
+        setMessages(prev => [...prev, { from: { id: from.id }, message, timestamp }])
       }
       fetchConversations()
     })
@@ -86,133 +86,151 @@ export default function Messages() {
   }
 
   return (
-    <div className="container" style={{ maxWidth: '1200px', height: '100vh', padding: 0, display: 'flex' }}>
-      {/* Sidebar */}
-      <div style={{ width: '350px', borderRight: '1px solid var(--bg-secondary)', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-primary)' }}>
-        <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--bg-secondary)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-            <Link to="/" style={{ color: '#64748b' }}><ArrowLeft size={20} /></Link>
-            <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Network</h2>
+    <div className="max-w-[1200px] mx-auto px-4 py-8 h-[calc(100vh-4rem)] flex gap-6">
+      
+      {/* Contact Sidebar */}
+      <div className="w-80 glass-card flex flex-col overflow-hidden border border-slate-200/50 dark:border-slate-800">
+        
+        {/* Search header */}
+        <div className="p-4 border-b border-slate-200/50 dark:border-slate-800 space-y-4">
+          <div className="flex items-center gap-3">
+            <Link to="/" className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-550 dark:text-slate-400 rounded-lg transition-colors">
+              <ArrowLeft size={16} />
+            </Link>
+            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white">DMs Terminal</h2>
           </div>
-          <div style={{ position: 'relative' }}>
-            <Search size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: '#94a3b8' }} />
+          
+          <div className="relative">
+            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input 
               type="text" 
-              className="input-field" 
-              style={{ paddingLeft: '2.5rem', marginBottom: 0, borderRadius: '24px', backgroundColor: 'var(--bg-secondary)' }}
-              placeholder="Search operatives..."
+              className="input-field pl-9 pr-4 h-10" 
+              placeholder="Search contacts..."
               value={searchQuery}
               onChange={handleSearch}
             />
           </div>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto' }}>
+        {/* Contact Lists */}
+        <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-850">
           {searchResults.length > 0 ? (
             searchResults.map(u => (
               <div 
                 key={u.id} 
                 onClick={() => { setSelectedUser(u); setSearchResults([]); setSearchQuery('') }}
-                style={{ padding: '1rem 1.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem', borderBottom: '1px solid var(--bg-secondary)' }}
+                className="p-3.5 cursor-pointer flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
               >
-                <div style={{ width: '40px', height: '40px', backgroundColor: '#e2e8f0', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <User size={20} style={{ color: '#64748b' }} />
+                <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center font-bold">
+                  <User size={18} />
                 </div>
-                <div style={{ fontWeight: 'bold' }}>{u.username}</div>
+                <div className="text-xs font-bold text-slate-800 dark:text-slate-200">{u.username}</div>
               </div>
             ))
-          ) : (
+          ) : conversations.length > 0 ? (
             conversations.map(conv => (
               <div 
                 key={conv.user.id} 
                 onClick={() => setSelectedUser(conv.user)}
-                style={{ 
-                  padding: '1rem 1.5rem', 
-                  cursor: 'pointer', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '1rem', 
-                  backgroundColor: selectedUser?.id === conv.user.id ? 'var(--bg-secondary)' : 'transparent',
-                  borderBottom: '1px solid var(--bg-secondary)'
-                }}
+                className={`p-4 cursor-pointer flex items-center gap-3 transition-colors ${
+                  selectedUser?.id === conv.user.id 
+                    ? 'bg-blue-500/5 dark:bg-indigo-500/5 border-l-2 border-blue-500 dark:border-indigo-500' 
+                    : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/20'
+                }`}
               >
-                <div style={{ width: '48px', height: '48px', backgroundColor: '#dbeafe', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <User size={24} style={{ color: '#2563eb' }} />
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-indigo-400 flex items-center justify-center flex-shrink-0">
+                  <User size={20} />
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                    <span style={{ fontWeight: 'bold' }}>{conv.user.username}</span>
-                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{new Date(conv.lastMessage.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-baseline mb-0.5">
+                    <span className="text-xs font-bold text-slate-900 dark:text-white truncate">{conv.user.username}</span>
+                    <span className="text-[9px] text-slate-400 shrink-0 font-mono">
+                      {new Date(conv.lastMessage.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
                   </div>
-                  <div style={{ fontSize: '0.85rem', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-450 truncate">
                     {conv.lastMessage.message}
-                  </div>
+                  </p>
                 </div>
               </div>
             ))
+          ) : (
+            <div className="p-8 text-center text-slate-400 dark:text-slate-500 mt-10">
+              <MessageSquare className="mx-auto mb-3 opacity-20" size={24} />
+              <p className="text-[10px] font-bold uppercase tracking-wider">No active channels</p>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Chat Area */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-secondary)' }}>
+      {/* Main Chat Area */}
+      <div className="flex-1 glass-card flex flex-col overflow-hidden bg-slate-50/20 dark:bg-slate-900/10 border border-slate-200/50 dark:border-slate-800 shadow-xl">
         {selectedUser ? (
           <>
-            <header style={{ padding: '1rem 2rem', backgroundColor: 'var(--bg-primary)', borderBottom: '1px solid var(--bg-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div style={{ width: '40px', height: '40px', backgroundColor: '#dbeafe', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <User size={20} style={{ color: '#2563eb' }} />
+            {/* Header */}
+            <header className="p-4 bg-white/50 dark:bg-slate-900/60 border-b border-slate-200/50 dark:border-slate-850 flex justify-between items-center backdrop-blur-md">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-600 dark:text-indigo-400 flex items-center justify-center">
+                  <User size={18} />
                 </div>
                 <div>
-                  <div style={{ fontWeight: 'bold' }}>{selectedUser.username}</div>
-                  <div style={{ fontSize: '0.75rem', color: '#22c55e' }}>Secure Channel Active</div>
+                  <div className="text-xs font-bold text-slate-900 dark:text-white">{selectedUser.username}</div>
+                  <div className="text-[9px] font-black text-emerald-500 flex items-center gap-1 uppercase tracking-wider">
+                    <span className="inline-block w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                    Tunnel Secure
+                  </div>
                 </div>
               </div>
-              <button style={{ background: 'none', border: 'none', color: '#94a3b8' }}><MoreVertical size={20} /></button>
+              <button className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg">
+                <MoreVertical size={16} />
+              </button>
             </header>
 
-            <main style={{ flex: 1, overflowY: 'auto', padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {/* Message Feed */}
+            <main className="flex-1 overflow-y-auto p-6 flex flex-col gap-4 bg-slate-100/10">
               {messages.map((msg, i) => {
                 const isMe = msg.from.id === user.id
                 return (
-                  <div key={i} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '70%' }}>
-                    <div style={{ 
-                      padding: '0.75rem 1.25rem', 
-                      borderRadius: '20px', 
-                      backgroundColor: isMe ? '#2563eb' : 'var(--bg-secondary)',
-                      color: isMe ? '#ffffff' : 'var(--text-primary)',
-                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                      fontSize: '0.9375rem'
-                    }}>
+                  <div 
+                    key={i} 
+                    className={`flex flex-col max-w-[75%] ${
+                      isMe ? 'self-end items-end' : 'self-start items-start'
+                    }`}
+                  >
+                    <div className={`px-4 py-2.5 rounded-2xl text-xs shadow-sm ${
+                      isMe 
+                        ? 'bg-blue-600 text-white rounded-tr-none' 
+                        : 'bg-white dark:bg-slate-850 text-slate-850 dark:text-slate-150 rounded-tl-none border border-slate-200/40 dark:border-slate-800'
+                    }`}>
                       {msg.message}
                     </div>
-                    <div style={{ fontSize: '0.65rem', color: '#94a3b8', marginTop: '0.25rem', textAlign: isMe ? 'right' : 'left' }}>
+                    <span className="text-[9px] text-slate-400 font-mono mt-1 px-1">
                       {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </div>
+                    </span>
                   </div>
                 )
               })}
               <div ref={messagesEndRef} />
             </main>
 
-            <form onSubmit={sendMessage} style={{ padding: '1.5rem 2rem', backgroundColor: 'var(--bg-primary)', borderTop: '1px solid var(--bg-secondary)', display: 'flex', gap: '1rem' }}>
+            {/* Input form */}
+            <form onSubmit={sendMessage} className="p-4 bg-white/50 dark:bg-slate-900/60 border-t border-slate-200/50 dark:border-slate-850 flex gap-3 items-center">
               <input 
                 type="text" 
-                className="input-field" 
-                style={{ marginBottom: 0, borderRadius: '24px', backgroundColor: 'var(--bg-secondary)' }}
-                placeholder="Message operative..."
+                className="input-field flex-1 h-11" 
+                placeholder="Send secure transmission..."
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
               />
-              <button type="submit" className="btn btn-primary" style={{ borderRadius: '50%', width: '45px', height: '45px', padding: 0 }}>
-                <Send size={20} />
+              <button type="submit" className="btn btn-primary w-11 h-11 rounded-xl !p-0 shrink-0">
+                <Send size={16} />
               </button>
             </form>
           </>
         ) : (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
-            <MessageSquare size={64} style={{ marginBottom: '1.5rem', opacity: 0.2 }} />
-            <p>Select a contact to begin secure transmission</p>
+          <div className="flex-1 flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 p-8">
+            <MessageSquare size={48} className="mb-4 opacity-15" />
+            <p className="text-xs font-bold uppercase tracking-wider">Select operative to begin communication</p>
           </div>
         )}
       </div>

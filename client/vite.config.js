@@ -1,24 +1,26 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { nodePolyfills } from 'vite-plugin-node-polyfills'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
   plugins: [
-    react(),
-    nodePolyfills({
-      globals: {
-        Buffer: true,
-        global: true,
-        process: true,
-      },
-      protocolImports: true,
-    })
+    react()
   ],
+  resolve: {
+    alias: {
+      '@shared': path.resolve(__dirname, '../shared')
+    }
+  },
   server: {
     port: 3000,
     strictPort: true,
+    fs: {
+      allow: ['..']
+    },
     allowedHosts: [
-      'acid-former-gulf-impression.trycloudflare.com',
       '.trycloudflare.com'
     ],
     proxy: {
@@ -26,9 +28,10 @@ export default defineConfig({
         target: 'http://localhost:3001',
         changeOrigin: true
       },
-      '/ws': {
-        target: 'http://localhost:8080',
-        ws: true
+      '/socket.io': {
+        target: 'http://localhost:3001',
+        ws: true,
+        changeOrigin: true
       }
     }
   },

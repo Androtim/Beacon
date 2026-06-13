@@ -24,18 +24,11 @@ export function useWatchParty(roomId, user) {
     }
 
     console.log('🏠 Joining room:', roomId, 'as user:', user.username)
-    // Use the new join method from SignalingClient
-    if (socket.join) {
-        socket.join(roomId, user.id, { username: user.username })
-    } else {
-        // Fallback if socket isn't fully initialized yet or wrong type
-        console.warn('Socket does not support join method')
-    }
+    socket.emit('join-room', { roomId })
 
     return () => {
-      if (socket.leave) {
-        socket.leave()
-      }
+      console.log('🏠 Leaving room:', roomId)
+      socket.emit('leave-room', { roomId })
     }
   }, [socket, roomId, user])
 
