@@ -44,6 +44,10 @@ Desktop.ini
 coverage/
 .nyc_output/
 
+# Playwright
+test-results/
+playwright-report/
+
 # Package lock files (keep one or the other)
 # Uncomment one of these based on your preference:
 # yarn.lock
