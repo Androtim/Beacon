@@ -141,7 +141,10 @@ export default function Messages() {
             Watch parties and file sharing work without an account, but private messages need a persistent identity
             so friends can find you and your history survives.
           </p>
-          <Link to="/signup" className="btn btn-primary px-8 h-11 text-xs inline-flex items-center">Create an account</Link>
+          <div className="flex gap-3 justify-center">
+            <Link to="/login" className="btn btn-secondary px-6 h-11 text-xs inline-flex items-center">Log in</Link>
+            <Link to="/signup" className="btn btn-primary px-6 h-11 text-xs inline-flex items-center">Create an account</Link>
+          </div>
         </div>
       </div>
     )
