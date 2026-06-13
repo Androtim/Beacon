@@ -7,6 +7,7 @@ import axios from 'axios'
 import { getOrCreateKeyPair, encryptMessage, decryptMessage, isEnvelope, encryptGroupMessage, decryptGroupMessage } from '../lib/dmCrypto'
 import { useDmFiles } from '../hooks/useDmFiles'
 import { useGroups } from '../hooks/useGroups'
+import { useGroupFiles } from '../hooks/useGroupFiles'
 import { formatFileSize as formatSize } from '../context/TransfersContext'
 
 export default function Messages() {
@@ -14,7 +15,9 @@ export default function Messages() {
   const socket = useSocket()
   const { transfers, sendFile, acceptFile, declineFile, hydrate } = useDmFiles({ socket, me: user })
   const { groups, createGroup } = useGroups({ socket, enabled: !isGuest })
+  const { shares: groupShares, downloads: groupDownloads, shareFile: shareGroupFile, downloadFile: downloadGroupFile } = useGroupFiles({ socket, me: user })
   const attachRef = useRef(null)
+  const groupAttachRef = useRef(null)
   const navigate = useNavigate()
   const [partyInvites, setPartyInvites] = useState([]) // {from, fromUsername, roomId}
 
@@ -165,13 +168,13 @@ export default function Messages() {
   // Live group messages for the open group.
   useEffect(() => {
     if (!socket) return
-    const onGroupMsg = async ({ groupId, id, from, body, timestamp, kind }) => {
+    const onGroupMsg = async ({ groupId, id, from, body, timestamp, kind, meta }) => {
       const g = selectedGroupRef.current
       if (!g || g.id !== groupId) return
       const text = kind === 'text'
         ? await decryptGroupMessage(keysRef.current?.privateKey, g.members, user.id, from.id, body)
         : body
-      setGroupMessages((p) => [...p, { id, from, text, timestamp, kind }])
+      setGroupMessages((p) => [...p, { id, from, text, timestamp, kind, meta }])
     }
     socket.on('group-message', onGroupMsg)
     return () => socket.off('group-message', onGroupMsg)
@@ -214,6 +217,19 @@ export default function Messages() {
     socket.emit('group-message', { groupId: g.id, body, timestamp })
     setGroupMessages((p) => [...p, { id: `local-${timestamp}`, from: { id: user.id, username: user.username }, text: plaintext, timestamp, kind: 'text' }])
     setNewMessage('')
+  }
+
+  const onShareGroupFile = (file) => {
+    const g = selectedGroup
+    if (!g || !file) return
+    const msg = shareGroupFile(g, file)
+    if (msg) {
+      setGroupMessages((p) => [...p, {
+        id: `local-${msg.timestamp}`, from: { id: user.id, username: user.username },
+        kind: 'file-offer', meta: { transferId: msg.transferId, fileInfo: msg.fileInfo },
+        text: `📎 ${msg.fileInfo.name}`, timestamp: msg.timestamp,
+      }])
+    }
   }
 
   const handleGroupSearch = async (e) => {
@@ -444,6 +460,51 @@ export default function Messages() {
             <main className="flex-1 overflow-y-auto p-6 flex flex-col gap-3">
               {groupMessages.map((msg, i) => {
                 const isMe = msg.from.id === user.id
+                if (msg.kind === 'file-offer' && msg.meta?.transferId) {
+                  const { transferId, fileInfo } = msg.meta
+                  const share = groupShares.find((s) => s.transferId === transferId)
+                  const dl = groupDownloads.find((d) => d.transferId === transferId)
+                  const percents = share ? Object.values(share.recipients) : []
+                  const downloading = percents.filter((p) => p < 100).length
+                  const behind = percents.length ? Math.min(...percents) : 0
+                  return (
+                    <div key={msg.id || i} className={`flex flex-col max-w-[80%] ${isMe ? 'self-end items-end' : 'self-start items-start'}`} data-testid="group-file">
+                      {!isMe && <span className="text-[9px] font-bold mb-0.5 px-1" style={{ color: 'rgb(var(--accent))' }}>{msg.from.username}</span>}
+                      <div className="px-3.5 py-3 w-64" style={{ background: 'var(--surface-raised)', color: 'var(--text-primary)', borderRadius: 'var(--radius)' }}>
+                        <div className="flex items-center gap-2.5">
+                          <FileIcon size={18} style={{ color: 'rgb(var(--accent))' }} className="shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold truncate">{fileInfo?.name}</p>
+                            <p className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>{formatSize(fileInfo?.size ?? 0)}</p>
+                          </div>
+                        </div>
+                        {isMe ? (
+                          <p className="text-[10px] mt-2" style={{ color: 'var(--text-secondary)' }} data-testid="group-file-status">
+                            {percents.length === 0
+                              ? 'Shared — waiting for downloads'
+                              : `${downloading > 0 ? `${downloading} downloading · furthest behind ${behind}%` : 'Everyone has it ✓'}`}
+                          </p>
+                        ) : dl ? (
+                          dl.status === 'saved' ? (
+                            <p className="text-[10px] mt-2 flex items-center gap-1" style={{ color: 'rgb(16 185 129)' }} data-testid="group-file-done"><Check size={12} /> Saved</p>
+                          ) : (
+                            <div className="mt-2.5">
+                              <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'rgb(0 0 0 / 0.2)' }}>
+                                <div className="h-full" style={{ width: `${dl.percent}%`, background: 'rgb(var(--accent))' }} />
+                              </div>
+                              <p className="text-[10px] mt-1" style={{ color: 'var(--text-secondary)' }}>{dl.percent}% · downloading</p>
+                            </div>
+                          )
+                        ) : (
+                          <button onClick={() => downloadGroupFile({ transferId, sharerId: msg.from.id, fileInfo })} className="btn btn-primary w-full h-8 text-[11px] mt-2.5" data-testid="group-file-download"><Download size={13} /> Download</button>
+                        )}
+                      </div>
+                      <span className="text-[9px] font-mono mt-1 px-1" style={{ color: 'var(--text-secondary)' }}>
+                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  )
+                }
                 return (
                   <div key={msg.id || i} className={`flex flex-col max-w-[75%] ${isMe ? 'self-end items-end' : 'self-start items-start'}`} data-testid="group-message">
                     {!isMe && <span className="text-[9px] font-bold mb-0.5 px-1" style={{ color: 'rgb(var(--accent))' }}>{msg.from.username}</span>}
@@ -463,6 +524,9 @@ export default function Messages() {
             </main>
 
             <form onSubmit={sendGroupMessage} className="p-4 border-t flex gap-2 items-center" style={{ borderColor: 'var(--border)' }}>
+              <input ref={groupAttachRef} type="file" className="hidden" data-testid="group-attach-input"
+                onChange={(e) => { const f = e.target.files[0]; if (f) onShareGroupFile(f); e.target.value = null }} />
+              <button type="button" onClick={() => groupAttachRef.current?.click()} className="btn btn-secondary w-11 h-11 !p-0 shrink-0" title="Share a file" data-testid="group-attach"><Paperclip size={16} /></button>
               <input
                 type="text"
                 className="input-field flex-1 h-11"

@@ -288,6 +288,17 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
       emitToUsers(recipients, 'group-message', payload)
     })
 
+    // Group file transfer handshake (1:1 between sharer and each downloader),
+    // relayed by userId on its own channel so it never collides with dm-file-*.
+    on('group-file-request', ({ to, transferId }) => {
+      const sid = dmRecipientSocket(to)
+      if (sid) io.to(sid).emit('group-file-request', { from: userId, transferId })
+    })
+    on('group-file-signal', ({ to, signal }) => {
+      const sid = dmRecipientSocket(to)
+      if (sid) io.to(sid).emit('group-file-signal', { from: userId, signal })
+    })
+
     // ---- Generic P2P file share (share codes) ----
 
     on('file-share-create', ({ code, files }) => {

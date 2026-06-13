@@ -58,6 +58,8 @@ export const schemas = {
     kind: z.string().max(32).optional(),
     meta: z.record(z.string(), z.unknown()).optional(),
   }),
+  'group-file-request': z.object({ to: z.string().min(1).max(64), transferId: z.string().min(1).max(64) }),
+  'group-file-signal': z.object({ to: z.string().min(1).max(64), signal: signalPayload }),
   'file-share-create': z.object({
     code: z.string().regex(/^[A-Za-z0-9]{4,16}$/),
     files: z.array(fileInfo).min(1).max(100),

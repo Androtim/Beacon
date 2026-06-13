@@ -110,6 +110,11 @@ export interface ClientToServerEvents {
     kind?: string
     meta?: Record<string, unknown>
   }) => void
+  // Group file sharing: a member offers a file via a 'file-offer' group
+  // message, then each downloader handshakes 1:1 with the sharer over its own
+  // signal channel (separate from dm-file-* to avoid cross-talk).
+  'group-file-request': (data: { to: string; transferId: string }) => void
+  'group-file-signal': (data: { to: string; signal: SignalPayload }) => void
 
   'file-share-create': (data: { code: string; files: FileInfo[] }) => void
   'file-share-join': (data: { code: string }) => void
@@ -170,6 +175,8 @@ export interface ServerToClientEvents {
     meta?: Record<string, unknown>
   }) => void
   'group-created': (data: { group: GroupSummary }) => void
+  'group-file-request': (data: { from: string; transferId: string }) => void
+  'group-file-signal': (data: { from: string; signal: SignalPayload }) => void
   'user-online': (data: { id: string; username: string }) => void
   'user-offline': (userId: string) => void
 
