@@ -12,10 +12,13 @@ test.describe('unified launcher', () => {
   })
 
   test('code box routes a 6-char code to a watch party', async ({ page }) => {
+    // Unique code — rooms persist server-side, so a fixed code could already
+    // exist with a different host.
+    const code = ('A' + Date.now().toString(36).toUpperCase()).slice(-6)
     await page.goto('/')
-    await page.getByTestId('launcher-hero').getByTestId('launcher-code').fill('ABC123')
+    await page.getByTestId('launcher-hero').getByTestId('launcher-code').fill(code)
     await page.getByTestId('launcher-join').click()
-    await expect(page).toHaveURL(/\/party\/ABC123/)
+    await expect(page).toHaveURL(new RegExp(`/party/${code}`))
     await expect(page.getByTestId('host-controls')).toBeVisible()
   })
 

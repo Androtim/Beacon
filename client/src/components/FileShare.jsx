@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Upload, Download, Copy, Check, X, FileIcon, Share2, ShieldCheck, Zap, AlertCircle } from 'lucide-react'
 import { useTransfers } from '../context/TransfersContext'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -9,12 +10,16 @@ export default function FileShare() {
   const [inputCode, setInputCode] = useState('')
   const [copied, setCopied] = useState(false)
   const fileInputRef = useRef(null)
+  const navigate = useNavigate()
 
   const {
     mode, shareCode, selectedFiles, pendingFiles, joinError,
     uploadProgress, downloadProgress, receiverStatus, formatFileSize,
-    createShare, joinShare, startDownload, cancel: cancelTransfer,
+    createShare, joinShare, startDownload, cancel,
   } = useTransfers()
+
+  // Closing a transfer returns Home (the launcher), not the bare Files page.
+  const cancelTransfer = () => { cancel(); navigate('/') }
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files)

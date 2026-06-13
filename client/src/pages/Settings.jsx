@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Appearance from '../components/Appearance'
+import ThemeReset from '../components/ThemeReset'
 import { ArrowLeft, User, Palette, LogOut } from 'lucide-react'
 
 export default function Settings() {
@@ -68,6 +69,9 @@ export default function Settings() {
         {sectionTitle(Palette, 'Appearance')}
         <Appearance />
       </section>
+
+      {/* Shadow-DOM reset escape hatch — only mounted here to avoid clutter elsewhere. */}
+      <ThemeReset />
 
       <button
         onClick={handleSignOut}
