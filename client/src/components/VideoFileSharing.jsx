@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Upload, Users, Download, CheckCircle, AlertCircle } from 'lucide-react'
+import { Upload, Users, Download, CheckCircle, AlertCircle, Radio } from 'lucide-react'
 import { useFileTransfer } from '../hooks/useFileTransfer'
-import { cleanupTransfer } from '../lib/p2p/transfer'
 import { motion } from 'framer-motion'
 
 export default function VideoFileSharing({ socket, roomId, isHost, onVideoReady, hostVideoSource, initialFileShare }) {
@@ -14,13 +13,10 @@ export default function VideoFileSharing({ socket, roomId, isHost, onVideoReady,
   const fileInputRef = useRef(null)
   const selectedFileRef = useRef(null)
   const videoUrlRef = useRef(null)
-  const transferId = `room-${roomId}`
 
-  // Leaving the party: release the blob and only then the OPFS bytes under it.
   useEffect(() => () => {
     if (videoUrlRef.current) URL.revokeObjectURL(videoUrlRef.current)
-    cleanupTransfer(`room-${roomId}`)
-  }, [roomId])
+  }, [])
 
   const formatFileSize = useCallback((bytes) => {
     if (bytes === 0) return '0 Bytes'
@@ -29,21 +25,11 @@ export default function VideoFileSharing({ socket, roomId, isHost, onVideoReady,
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }, [])
 
-  // NOTE: no cleanupTransfer here — the File is a live reference to the OPFS
-  // entry; deleting it would invalidate the blob URL mid-playback.
-  const handleVideoReceived = useCallback((file, meta) => {
-    const url = URL.createObjectURL(file)
-    videoUrlRef.current = url
-    setPhase('done')
-    onVideoReady?.(url, { name: meta.name, size: file.size, type: meta.type })
-  }, [onVideoReady])
-
   const {
-    status, uploadProgress, downloadProgress, sendTo, receiveFrom, cancelAll,
+    status, serveTo, streamFrom, cancelAll,
   } = useFileTransfer({
     socket,
     signalEvent: 'video-file-signal',
-    onFileReceived: handleVideoReceived,
   })
 
   const cancelTransfer = useCallback(() => {
@@ -61,11 +47,20 @@ export default function VideoFileSharing({ socket, roomId, isHost, onVideoReady,
     if (socket && isHost) socket.emit('video-file-cancel', { roomId })
   }, [socket, roomId, isHost, cancelAll])
 
+  // Streaming: playback starts as soon as the channel is up — the browser's
+  // demuxer pulls byte ranges from the host on demand; no full download.
   const acceptFileTransfer = useCallback(async () => {
     setPhase('accepted')
-    await receiveFrom(pendingHostId, transferId)
+    const key = `${roomId}-${Math.random().toString(36).slice(2, 10)}`
+    await streamFrom(pendingHostId, key, {
+      size: pendingFileInfo.size,
+      type: pendingFileInfo.type || 'video/mp4',
+    }, (url) => {
+      setPhase('done')
+      onVideoReady?.(url, pendingFileInfo)
+    })
     socket.emit('video-file-request', { to: pendingHostId })
-  }, [socket, pendingHostId, receiveFrom, transferId])
+  }, [socket, pendingHostId, pendingFileInfo, streamFrom, roomId, onVideoReady])
 
   // Room state already had a share in flight when we joined.
   useEffect(() => {
@@ -85,9 +80,9 @@ export default function VideoFileSharing({ socket, roomId, isHost, onVideoReady,
       setPendingHostId(hostId)
       setPhase('pending')
     }
-    // Host: participant accepted — dial them and stream the video.
+    // Host: participant accepted — dial them and serve byte ranges on demand.
     const onRequest = ({ from }) => {
-      if (selectedFileRef.current) sendTo(from, [selectedFileRef.current], transferId)
+      if (selectedFileRef.current) serveTo(from, selectedFileRef.current)
     }
     const onCancel = () => cancelTransfer()
 
@@ -99,14 +94,11 @@ export default function VideoFileSharing({ socket, roomId, isHost, onVideoReady,
       socket.off('video-file-request', onRequest)
       socket.off('video-file-cancel', onCancel)
     }
-  }, [socket, isHost, sendTo, transferId, cancelTransfer])
+  }, [socket, isHost, serveTo, cancelTransfer])
 
   const participantStatus = phase === 'done' ? 'ready'
-    : status === 'transferring' ? 'downloading'
     : phase === 'accepted' ? 'connecting'
     : phase // idle | pending
-
-  const uploadPercent = selectedFile ? (uploadProgress[selectedFile.name] || 0) : 0
 
   return (
     <div className="bg-[#1e293b]/50 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-800 backdrop-blur-md rounded-2xl p-5 space-y-4 font-mono shadow-xl shadow-slate-100/50 dark:shadow-none">
@@ -169,14 +161,11 @@ export default function VideoFileSharing({ socket, roomId, isHost, onVideoReady,
 
               {isSharing && (
                 <div className="space-y-3">
-                  <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 text-center">
-                    <p className="text-blue-500 text-[10px] font-black uppercase tracking-wider">{uploadPercent}% SYNCED</p>
-                    <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
-                      <motion.div
-                        animate={{ width: `${uploadPercent}%` }}
-                        className="h-full bg-blue-500"
-                      />
-                    </div>
+                  <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 text-center flex items-center justify-center gap-2">
+                    <Radio size={12} className="text-blue-500 animate-pulse" />
+                    <p className="text-blue-500 text-[10px] font-black uppercase tracking-wider">
+                      {status === 'streaming' ? 'STREAMING_TO_PEERS' : 'BROADCAST_LIVE // AWAITING_PEERS'}
+                    </p>
                   </div>
                   <button
                     onClick={cancelTransfer}
@@ -229,36 +218,11 @@ export default function VideoFileSharing({ socket, roomId, isHost, onVideoReady,
             </div>
           )}
 
-          {participantStatus === 'downloading' && (
-            <div className="space-y-4 bg-slate-50 dark:bg-slate-800/10 border border-slate-200/50 dark:border-slate-800 rounded-xl p-5">
-              <div className="text-center text-slate-700 dark:text-slate-300 font-black text-[9px] uppercase tracking-[0.3em] animate-pulse">Syncing_Payload...</div>
-              {Object.entries(downloadProgress).map(([fileIndex, prog]) => (
-                <div key={fileIndex} className="space-y-2">
-                  <div className="flex justify-between font-bold text-[9px] text-blue-500">
-                    <span data-testid="party-download-percent">{prog}%</span>
-                  </div>
-                  <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                    <motion.div
-                      animate={{ width: `${prog}%` }}
-                      className="h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.2)]"
-                    />
-                  </div>
-                </div>
-              ))}
-              <button
-                onClick={cancelTransfer}
-                className="btn bg-rose-500 text-white w-full h-8 text-[9px]"
-              >
-                ABORT
-              </button>
-            </div>
-          )}
-
           {participantStatus === 'ready' && (
             <div className="text-center py-7 px-4 bg-emerald-500/5 rounded-xl border border-emerald-500/20" data-testid="party-file-ready">
               <CheckCircle className="h-7 w-7 mx-auto mb-2 text-emerald-500" />
               <p className="text-emerald-500 text-[10px] font-black uppercase tracking-[0.2em] leading-relaxed">
-                Payload_Synchronized
+                Streaming_Live // Bytes_On_Demand
               </p>
             </div>
           )}
