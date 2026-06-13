@@ -31,28 +31,30 @@ test('DMs are end-to-end encrypted: users read plaintext, server stores cipherte
   await a.addInitScript((t) => localStorage.setItem('token', t), alice.token)
   await b.addInitScript((t) => localStorage.setItem('token', t), bob.token)
   await b.goto('/messages')
-  await expect(b.getByPlaceholder('Search contacts...')).toBeVisible()
-  // Bob's key must be published before Alice looks him up.
+  await expect(b.getByPlaceholder('Search people…')).toBeVisible()
+  // Bob's key must be published before Alice looks him up. Generous timeout:
+  // this spec runs in parallel with the other heavy P2P/voice specs.
   await expect.poll(async () => {
     const res = await fetch(`${API}/api/users/search?query=Bob${tag}`, {
       headers: { Authorization: `Bearer ${alice.token}` },
     })
     const data = await res.json()
     return data.users?.[0]?.publicKey ? 'published' : 'pending'
-  }).toBe('published')
+  }, { timeout: 30_000 }).toBe('published')
 
   await a.goto('/messages')
-  await a.getByPlaceholder('Search contacts...').fill(`Bob${tag}`)
+  await a.getByPlaceholder('Search people…').fill(`Bob${tag}`)
   await a.getByText(`Bob${tag}`).first().click()
 
   const secret = `the cave entrance is behind the waterfall ${tag}`
-  await a.getByPlaceholder('Send secure transmission...').fill(secret)
-  await a.getByPlaceholder('Send secure transmission...').press('Enter')
-  await expect(a.getByText(secret)).toBeVisible()
+  await a.getByPlaceholder('Message…').fill(secret)
+  await a.getByPlaceholder('Message…').press('Enter')
+  await expect(a.getByText(secret)).toBeVisible({ timeout: 15_000 })
 
   // Bob reads the plaintext through his client...
+  await expect(b.getByText(`Alice${tag}`).first()).toBeVisible({ timeout: 15_000 })
   await b.getByText(`Alice${tag}`).first().click()
-  await expect(b.getByText(secret)).toBeVisible({ timeout: 10_000 })
+  await expect(b.getByText(secret)).toBeVisible({ timeout: 15_000 })
 
   // ...but the server-side record is an opaque envelope: no plaintext.
   const raw = await fetch(`${API}/api/messages/${alice.user.id}`, {
