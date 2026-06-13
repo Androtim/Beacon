@@ -1,0 +1,27 @@
+# Beacon API + signaling server (Node via tsx), managed by systemd.
+# Install: sudo cp deploy/beacon.service /etc/systemd/system/beacon.service
+#          sudo systemctl daemon-reload && sudo systemctl enable --now beacon
+# Logs:    journalctl -u beacon -f
+#
+# Adjust ExecStart if `which npm` reports a different path (e.g. a Node version
+# manager). Runs as the unprivileged `beacon` user created in DEPLOY.md.
+
+[Unit]
+Description=Beacon signaling server
+After=network.target
+
+[Service]
+Type=simple
+User=beacon
+WorkingDirectory=/opt/beacon/server
+EnvironmentFile=/opt/beacon/server/.env
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=3
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
