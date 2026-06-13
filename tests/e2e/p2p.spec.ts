@@ -209,7 +209,7 @@ test('watch party: host shares a video file P2P and participant can play it', as
   await expect(guest.getByTestId('participant-count')).toHaveText('2')
 
   // Host switches to P2P file mode and broadcasts a real video file.
-  await host.getByRole('button', { name: /Local P2P/i }).click()
+  await host.getByTestId('source-mode-file').click()
   const videoBytes = fs.readFileSync(path.resolve(__dirname, '../../client/public/samples/sync-test.mp4'))
   await host.getByTestId('party-file-input').setInputFiles({
     name: 'movie.mp4',
