@@ -11,7 +11,7 @@ import { formatFileSize as formatSize } from '../context/TransfersContext'
 export default function Messages() {
   const { user, isGuest } = useAuth()
   const socket = useSocket()
-  const { transfers, sendFile, acceptFile, declineFile } = useDmFiles({ socket, me: user })
+  const { transfers, sendFile, acceptFile, declineFile, hydrate } = useDmFiles({ socket, me: user })
   const attachRef = useRef(null)
   const navigate = useNavigate()
   const [partyInvites, setPartyInvites] = useState([]) // {from, fromUsername, roomId}
@@ -104,11 +104,37 @@ export default function Messages() {
       // The other party's public key decrypts in both directions (ECDH is
       // symmetric between the two of us).
       const otherKey = selectedUserRef.current?.publicKey
-      const decrypted = await Promise.all(res.data.messages.map(async (m) => ({
-        ...m,
-        message: await decryptFor(otherKey, m.message),
-      })))
-      setMessages(decrypted)
+      // Split history into plain text bubbles vs. the typed cards (party
+      // invites / file offers), so the cards persist across reloads and offline
+      // gaps the same way text does.
+      const texts = []
+      const invites = []
+      const offers = []
+      for (const m of res.data.messages) {
+        if (m.kind === 'party-invite' && m.meta?.roomId) {
+          invites.push({ from: m.from.id, fromUsername: m.from.username, roomId: m.meta.roomId })
+        } else if (m.kind === 'file-offer' && m.meta?.transferId) {
+          const mine = m.from.id === user.id
+          offers.push({
+            id: m.meta.transferId,
+            peerId: mine ? m.to.id : m.from.id,
+            peerUsername: mine ? m.to.username : m.from.username,
+            direction: mine ? 'out' : 'in',
+            fileInfo: m.meta.fileInfo,
+            status: mine ? 'sent' : 'offered',
+            percent: mine ? 100 : 0,
+          })
+        } else {
+          texts.push({ ...m, message: await decryptFor(otherKey, m.message) })
+        }
+      }
+      setMessages(texts)
+      if (offers.length) hydrate(offers)
+      if (invites.length) setPartyInvites((p) => {
+        const have = new Set(p.map((x) => x.roomId))
+        const add = invites.filter((x) => !have.has(x.roomId))
+        return add.length ? [...p, ...add] : p
+      })
     } catch (err) {
       console.error('Failed to fetch messages')
     }

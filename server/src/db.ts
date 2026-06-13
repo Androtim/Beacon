@@ -79,6 +79,13 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE users ADD COLUMN public_key TEXT;
   `,
+  // v4: typed messages — party invites and file offers persist as DMs so a
+  // recipient sees them whenever they open the chat, even if they were offline
+  // or on another page when it was sent. 'meta' holds the structured payload.
+  `
+  ALTER TABLE messages ADD COLUMN kind TEXT NOT NULL DEFAULT 'text';
+  ALTER TABLE messages ADD COLUMN meta TEXT;
+  `,
 ]
 
 const migrate = db.transaction(() => {
@@ -111,6 +118,8 @@ interface MessageRow {
   message: string
   timestamp: number
   read: number
+  kind: string
+  meta: string | null
 }
 
 export function toPublicUser(row: UserRow): PublicUser {
@@ -276,7 +285,7 @@ export function cleanupStaleRooms(): number {
 // ---------- Messages ----------
 
 const insertMessage = db.prepare(
-  `INSERT INTO messages (id, from_id, to_id, message, timestamp, read) VALUES (?, ?, ?, ?, ?, 0)`
+  `INSERT INTO messages (id, from_id, to_id, message, timestamp, read, kind, meta) VALUES (?, ?, ?, ?, ?, 0, ?, ?)`
 )
 const selectMessagesBetween = db.prepare(
   `SELECT * FROM messages
@@ -302,9 +311,17 @@ const countUnreadFrom = db.prepare(
   `SELECT COUNT(*) AS n FROM messages WHERE from_id = ? AND to_id = ? AND read = 0`
 )
 
-export function createMessage(fromId: string, toId: string, message: string, timestamp: number): MessageRow {
-  const row: MessageRow = { id: randomUUID(), from_id: fromId, to_id: toId, message, timestamp, read: 0 }
-  insertMessage.run(row.id, row.from_id, row.to_id, row.message, row.timestamp)
+export function createMessage(
+  fromId: string,
+  toId: string,
+  message: string,
+  timestamp: number,
+  kind: string = 'text',
+  meta: Record<string, unknown> | null = null,
+): MessageRow {
+  const metaStr = meta ? JSON.stringify(meta) : null
+  const row: MessageRow = { id: randomUUID(), from_id: fromId, to_id: toId, message, timestamp, read: 0, kind, meta: metaStr }
+  insertMessage.run(row.id, row.from_id, row.to_id, row.message, row.timestamp, kind, metaStr)
   return row
 }
 
@@ -328,6 +345,8 @@ export function getMessagesBetween(meId: string, otherId: string): MessagesRespo
     message: r.message,
     timestamp: r.timestamp,
     read: !!r.read,
+    kind: r.kind ?? 'text',
+    meta: r.meta ? (JSON.parse(r.meta) as Record<string, unknown>) : undefined,
   }))
 }
 
