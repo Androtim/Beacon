@@ -49,8 +49,11 @@ coverage/
 # yarn.lock
 # package-lock.json
 
-# MongoDB data
+# Local databases
 data/
+*.db
+*.db-wal
+*.db-shm
 
 # Uploads folder (if you have one)
 uploads/
