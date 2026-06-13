@@ -5,6 +5,10 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
+  // One worker: every spec shares one dev server + many specs spin multiple
+  // browser contexts, and one integration spec starts its own server. Running
+  // spec files in parallel starves resources and flakes; serial is reliable.
+  workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: [['list']],
   use: {
