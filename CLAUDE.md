@@ -60,10 +60,17 @@ validated by the owner — do not re-litigate:
 Phases: 0 foundation (TS+SQLite) ✅ → 1 guest identity + persistent rooms ✅
 → 2 sync engine (clock offset, drift loop, YouTube IFrame API) ✅
 → 3a P2P engine (perfect negotiation, OPFS streaming, resume) ✅
-→ 3b stream-while-downloading → 4 voice + E2E DMs → 5 UI/PWA.
-All merged phases have Playwright coverage (`npm run test:e2e`, 28 tests):
-real two-browser drift measurement, restart persistence, loopback resume with
-SHA-256 byte-identity, share-code and watch-party transfer e2e.
+→ 3b stream-while-downloading (service worker + P2P range protocol) ✅
+→ 4 voice chat + E2E-encrypted DMs ✅ → 5 UI overhaul + PWA (NEXT, needs
+owner's design input).
+All phases have Playwright coverage (`npm run test:e2e`, 30 tests): real
+two-browser drift measurement, restart persistence, loopback resume with
+SHA-256 byte-identity, transfer e2e, streamed playback, voice with fake audio
+devices, and ciphertext-on-the-server verification for DMs.
+
+Known follow-ups (see QUESTIONS.md): TURN credentials (env-ready, account
+needed), HLS via hls.js if wanted, DM passphrase key backup, device-only DM
+delivery toggle, OPFS orphan sweep for abandoned partial transfers.
 
 ### Known-broken (inherited, fixed by phases 1–3)
 
