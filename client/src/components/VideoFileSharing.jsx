@@ -76,6 +76,10 @@ export default function VideoFileSharing({ socket, roomId, isHost, onVideoReady,
 
     const onInfo = ({ fileInfo, hostId }) => {
       if (isHost) return
+      // Reset any prior attempt (errored/finished/half-open peer) so a re-shared
+      // video is actionable again instead of staying stuck on the old status —
+      // otherwise a failed transfer leaves the receiver unable to accept the next.
+      cancelAll()
       setPendingFileInfo(fileInfo)
       setPendingHostId(hostId)
       setPhase('pending')
@@ -94,7 +98,7 @@ export default function VideoFileSharing({ socket, roomId, isHost, onVideoReady,
       socket.off('video-file-request', onRequest)
       socket.off('video-file-cancel', onCancel)
     }
-  }, [socket, isHost, serveTo, cancelTransfer])
+  }, [socket, isHost, serveTo, cancelTransfer, cancelAll])
 
   const participantStatus = phase === 'done' ? 'ready'
     : status === 'error' ? 'error' // a failed/timed-out connection wins over the spinner
