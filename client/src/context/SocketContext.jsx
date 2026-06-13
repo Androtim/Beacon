@@ -13,6 +13,9 @@ export function SocketProvider({ children }) {
   const [socket, setSocket] = useState(null)
   const [connected, setConnected] = useState(false)
   const userId = user?.id
+  // The JWT embeds the username, so a rename/upgrade issues a new token; the
+  // socket must re-authenticate or the server keeps the stale identity.
+  const username = user?.username
 
   useEffect(() => {
     if (!userId) {
@@ -40,7 +43,7 @@ export function SocketProvider({ children }) {
       setSocket(null)
       setConnected(false)
     }
-  }, [userId])
+  }, [userId, username])
 
   const value = useMemo(() => ({ socket, connected }), [socket, connected])
   return <SocketContext.Provider value={value}>{children}</SocketContext.Provider>

@@ -184,7 +184,7 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
 
     on('file-share-ready', ({ to, fileInfo }) => {
       if (!sharesWith(socket.id, to)) return
-      io.to(to).emit('file-share-ready', { from: socket.id, fileInfo: fileInfo as FileInfo[] | null })
+      io.to(to).emit('file-share-ready', { from: socket.id, fileInfo: (fileInfo ?? null) as FileInfo[] | null })
     })
 
     on('file-share-signal', ({ to, signal }) => {
@@ -264,5 +264,11 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
   }
 
   rooms.startRoomCleanup()
+  setInterval(() => {
+    const now = Date.now()
+    for (const [code, share] of fileShares) {
+      if (share.expiresAt <= now) fileShares.delete(code)
+    }
+  }, 10 * 60 * 1000)
   return io
 }
