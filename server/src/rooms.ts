@@ -168,6 +168,6 @@ export function isHost(roomId: string, userId: string): boolean {
 export function startRoomCleanup(): NodeJS.Timeout {
   return setInterval(() => {
     const removed = cleanupStaleRooms()
-    if (removed > 0) console.log(`🧹 Cleaned up ${removed} stale room(s)`)
+    if (removed > 0) console.log(`cleaned up ${removed} stale room(s)`)
   }, 60 * 60 * 1000)
 }

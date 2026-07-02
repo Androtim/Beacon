@@ -1,8 +1,7 @@
 {
   "name": "beacon",
   "version": "1.0.0",
-  "description": "Cross-platform sync & share application for watching videos and sharing files",
-  "main": "server/index.js",
+  "description": "Synchronized watch parties and P2P file sharing in the browser",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "dev:clean": "node scripts/kill-port.js 3001 && npm run dev",
@@ -21,7 +20,7 @@
     "file-sharing",
     "webrtc"
   ],
-  "author": "Beacon Team",
+  "author": "Androtim",
   "license": "MIT",
   "devDependencies": {
     "@playwright/test": "^1.60.0",

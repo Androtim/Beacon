@@ -6,15 +6,13 @@ Hetzner VPS + Caddy (automatic HTTPS) + systemd, with the client served as stati
 files on the same origin as the API. **HTTPS is mandatory** — voice (mic), the
 streaming service worker, and secure WebRTC only work in a secure context.
 
-Legend: 🧑 = only you can do it · 🤖 = doable over SSH.
-
 > **Using Oracle Cloud (Always Free) instead of Hetzner?** Replace section 1 with
 > the [Oracle appendix](#appendix-oracle-cloud-always-free) below, then continue
 > from section 2. Sections 3–9 are identical (just SSH in as `ubuntu` and `sudo`).
 
 ---
 
-## 1. 🧑 Create the server (Hetzner Cloud)
+## 1. Create the server (Hetzner Cloud)
 
 - **Location:** an **EU** region (Falkenstein / Nuremberg / Helsinki). ARM is EU-only
   and cheapest. Signaling is tiny, so EU latency is fine even for non-EU users.
@@ -31,7 +29,7 @@ Legend: 🧑 = only you can do it · 🤖 = doable over SSH.
 
 Note the server's **public IPv4** — you'll need it for DNS.
 
-## 2. 🧑 DNS — a subdomain is fine
+## 2. DNS — a subdomain is fine
 
 Ask your friend (the domain owner) to add **one record**:
 
@@ -46,7 +44,7 @@ Optionally add an `AAAA` record to the IPv6 if you enabled one.
 
 Check it resolves: `dig +short beacon.theirdomain.com` → your IP.
 
-## 3. 🤖 Provision the box
+## 3. Provision the box
 
 ```bash
 ssh root@<IP>
@@ -68,7 +66,7 @@ mkdir -p /opt/beacon /opt/beacon/data
 chown -R beacon:beacon /opt/beacon
 ```
 
-## 4. 🤖 Get the code and build
+## 4. Get the code and build
 
 ```bash
 git clone https://github.com/Androtim/Beacon.git /opt/beacon   # public repo, no token needed
@@ -78,7 +76,7 @@ npm run build            # produces client/dist (the static SPA)
 chown -R beacon:beacon /opt/beacon
 ```
 
-## 5. 🤖 Configure the server env
+## 5. Configure the server env
 
 ```bash
 cp /opt/beacon/server/.env.example /opt/beacon/server/.env
@@ -98,17 +96,17 @@ DB_PATH=/opt/beacon/data/beacon.db
 
 (TURN comes in step 8.)
 
-## 6. 🤖 Run the server under systemd
+## 6. Run the server under systemd
 
 ```bash
 cp /opt/beacon/deploy/beacon.service /etc/systemd/system/beacon.service
 # Confirm the npm path matches ExecStart:  which npm
 systemctl daemon-reload
 systemctl enable --now beacon
-journalctl -u beacon -f      # should log: ✅ Beacon Server running on port 3001
+journalctl -u beacon -f      # should log: beacon server listening on port 3001
 ```
 
-## 7. 🤖 Caddy (HTTPS + static + proxy)
+## 7. Caddy (HTTPS + static + proxy)
 
 ```bash
 cp /opt/beacon/deploy/Caddyfile /etc/caddy/Caddyfile
@@ -123,14 +121,14 @@ Node server, and obtains HTTPS automatically. Visit **https://beacon.theirdomain
 
 Most P2P connects directly; ~10–20% behind strict NATs need a relay. Pick one:
 
-- **Managed (easiest):** 🧑 create a free **Metered** account (~50 GB/mo free), then 🤖
+- **Managed (easiest):** create a free **Metered** account (~50 GB/mo free), then 
   set in `.env`: `TURN_CREDENTIAL_API_URL=https://<sub>.metered.live/api/v1/turn/credentials?apiKey=<key>`
   and `systemctl restart beacon`.
-- **Self-hosted:** 🤖 `apt install coturn`, use `deploy/coturn.conf` (set the password
+- **Self-hosted:** `apt install coturn`, use `deploy/coturn.conf` (set the password
   and `external-ip`), open the TURN firewall ports (step 1), and point the
   `TURN_SERVER_URL/USERNAME/PASSWORD` vars in `.env` at it.
 
-## 9. ✅ Verify
+## 9. Verify
 
 - Load the site in two different browsers / devices, sign in, start a watch party.
 - Test voice (mic permission must appear — proves HTTPS secure context).
@@ -162,7 +160,7 @@ Runs Beacon at **$0/mo**. Use this in place of section 1, then continue from
 section 2 (DNS). Two things trip everyone up: a **dual firewall** (cloud + the
 instance's own iptables) and **ARM capacity**.
 
-### A. 🧑 Account
+### A. Account
 
 - Sign up at cloud.oracle.com. A card is required for identity verification —
   **not charged** while you stay on Always Free shapes.
@@ -172,7 +170,7 @@ instance's own iptables) and **ARM capacity**.
   stays free within Always Free limits but **exempts you from idle-instance
   reclamation** (Oracle otherwise reclaims low-CPU free instances after ~7 days).
 
-### B. 🧑 Create the instance
+### B. Create the instance
 
 - **Image:** Canonical **Ubuntu 24.04** (matches this guide).
 - **Shape:** **VM.Standard.A1.Flex** (ARM), e.g. **2 OCPU / 12 GB** — well within
@@ -186,7 +184,7 @@ instance's own iptables) and **ARM capacity**.
 - **Public IP:** keep the assigned IPv4. Reserve it (Networking → reserved IPs,
   also free) so it survives stop/start and your DNS never breaks.
 
-### C. 🧑 Open the ports — in BOTH firewalls
+### C. Open the ports — in BOTH firewalls
 
 1. **Cloud firewall** (VCN → Security Lists, or an NSG): add ingress rules for
    `0.0.0.0/0` → `80/tcp` and `443/tcp` (22 is already open). Add the TURN ports
@@ -200,7 +198,7 @@ instance's own iptables) and **ARM capacity**.
    ```
    (Skip this and the site is unreachable even with the cloud rule in place.)
 
-### D. 🤖 (E2.1.Micro only) add swap so the build doesn't OOM
+### D. (E2.1.Micro only) add swap so the build doesn't OOM
 
 ```bash
 sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
