@@ -117,6 +117,31 @@ export async function cleanupTransfer(transferId, fileCount = 32) {
   }
 }
 
+const ORPHAN_AGE_MS = 7 * 24 * 60 * 60 * 1000
+
+/**
+ * Delete part-files nothing has touched in a week. Resume depends on parts
+ * surviving reloads, so only age qualifies one as abandoned — anything being
+ * written has a fresh lastModified and is left alone.
+ */
+export async function sweepOrphanedTransfers(maxAgeMs = ORPHAN_AGE_MS) {
+  if (!opfsSupported()) return 0
+  try {
+    const root = await navigator.storage.getDirectory()
+    const dir = await root.getDirectoryHandle('beacon-transfers')
+    const stale = []
+    for await (const [name, handle] of dir.entries()) {
+      if (handle.kind !== 'file' || !name.endsWith('.part')) continue
+      const file = await handle.getFile()
+      if (Date.now() - file.lastModified > maxAgeMs) stale.push(name)
+    }
+    for (const name of stale) await dir.removeEntry(name).catch(() => {})
+    return stale.length
+  } catch {
+    return 0 // directory doesn't exist yet, or OPFS is unavailable
+  }
+}
+
 // ---------- Sender ----------
 
 /**
