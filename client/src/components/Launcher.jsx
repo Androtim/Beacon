@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTransfers } from '../context/TransfersContext'
+import { randomCode } from '../lib/randomCode'
 import { Plus, Tv, FolderUp, ArrowRight } from 'lucide-react'
 
 // One entry point for both worlds: a "New" button (watch party / send files)
@@ -23,7 +24,7 @@ export default function Launcher({ variant = 'hero' }) {
 
   const newParty = () => {
     setMenuOpen(false)
-    navigate(`/party/${Math.random().toString(36).substring(2, 8).toUpperCase()}`)
+    navigate(`/party/${randomCode(6)}`)
   }
   const newFiles = () => { setMenuOpen(false); fileRef.current?.click() }
   const onFiles = (e) => {
