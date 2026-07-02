@@ -167,13 +167,17 @@ export function toPublicUser(row: UserRow): PublicUser {
   return {
     id: row.id,
     username: row.username,
-    email: row.email ?? undefined,
     isGuest: !!row.is_guest,
     isOnline: !!row.is_online,
     lastSeen: row.last_seen,
     createdAt: row.created_at,
     publicKey: row.public_key ?? undefined,
   }
+}
+
+/** The user's own view of their account — the only place email is exposed. */
+export function toSelfUser(row: UserRow): PublicUser {
+  return { ...toPublicUser(row), email: row.email ?? undefined }
 }
 
 const insertUser = db.prepare(
