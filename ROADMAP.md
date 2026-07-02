@@ -2,7 +2,7 @@
 
 Where the project stands and everything left to do. Updated 2026-06-13.
 
-## ✅ Done
+## Done
 
 - **Foundation** — TypeScript + SQLite, typed shared client/server protocol, tests.
 - **Sessions** — guest-first identity, persistent rooms that survive restarts,
@@ -19,7 +19,7 @@ Where the project stands and everything left to do. Updated 2026-06-13.
 - **Reliability** — P2P connections fail gracefully with a clear error + retry
   (no more infinite spinner); shared playback control (anyone can pause/seek).
 
-## 🔜 Remaining
+## Remaining
 
 ### 1. Finish the visual overhaul (reskin remaining screens to Crystal Beacon)
 - [ ] Watch Party (the heart of the app — biggest screen)
@@ -72,7 +72,7 @@ Where the project stands and everything left to do. Updated 2026-06-13.
 
 ## Suggested order
 
-Finish the **Watch Party reskin** (1) → **request-to-stream** (3, you just asked
-for it, and it pairs with the Watch Party screen) → **customization system** (2)
-→ remaining screens (1) → group DMs / file-in-DM / stats / profiles (3) → PWA +
-deploy (5). Connectivity (4) and debt (6) slot in opportunistically.
+Finish the **Watch Party reskin** (1) → **request-to-stream** (3, pairs with the
+Watch Party screen) → **customization system** (2) → remaining screens (1) →
+group DMs / file-in-DM / stats / profiles (3) → PWA + deploy (5). Connectivity
+(4) and debt (6) slot in opportunistically.

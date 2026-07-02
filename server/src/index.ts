@@ -13,7 +13,7 @@ import {
 import initSocket, { notifyGroupCreated } from './sockets.js'
 
 if (!process.env.JWT_SECRET) {
-  console.error('❌ ERROR: JWT_SECRET is not set. The server cannot start without it.')
+  console.error('JWT_SECRET is not set. The server cannot start without it.')
   process.exit(1)
 }
 
@@ -67,7 +67,7 @@ app.use('/api/auth/guest', authLimiter)
 app.use('/api/auth', authRoutes)
 
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'Server is running!', database: 'SQLite', timestamp: new Date().toISOString() })
+  res.json({ status: 'ok', database: 'SQLite', timestamp: new Date().toISOString() })
 })
 
 type IceServer = { urls: string; username?: string; credential?: string }
@@ -179,5 +179,5 @@ app.get('/api/leaderboard', authenticateToken, (_req, res) => {
 initSocket(server, allowOrigin)
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Beacon Server running on port ${PORT} (SQLite)`)
+  console.log(`beacon server listening on port ${PORT}`)
 })
