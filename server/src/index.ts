@@ -20,9 +20,15 @@ if (!process.env.JWT_SECRET) {
 const app = express()
 const server = createServer(app)
 
-// CORS allowlist. Defaults cover local dev and cloudflare quick tunnels;
-// production sets ALLOWED_ORIGINS to its real origins.
-const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:3000')
+// Behind Caddy (or any single reverse proxy) the client IP arrives in
+// X-Forwarded-For; without this, rate limiting keys every request on the
+// proxy's loopback address — one shared bucket for all users.
+app.set('trust proxy', 1)
+
+// CORS allowlist. When ALLOWED_ORIGINS is unset we're in dev, where cloudflare
+// quick tunnels are also fine. Setting it (production) makes the list strict.
+const explicitOrigins = process.env.ALLOWED_ORIGINS
+const allowedOrigins = (explicitOrigins ?? 'http://localhost:3000')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean)
@@ -30,6 +36,7 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:3000')
 export function allowOrigin(origin: string | undefined): boolean {
   if (!origin) return true // same-origin requests and non-browser clients
   if (allowedOrigins.includes(origin)) return true
+  if (explicitOrigins) return false
   try {
     return new URL(origin).hostname.endsWith('.trycloudflare.com')
   } catch {

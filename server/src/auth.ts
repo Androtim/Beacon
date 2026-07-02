@@ -2,7 +2,7 @@ import { Router } from 'express'
 import {
   createUser, createGuest, upgradeGuestToAccount, updateUsername,
   findUserByEmail, findUserByUsername, setPublicKey,
-  verifyPassword, setUserOnline, toPublicUser,
+  verifyPassword, setUserOnline, toSelfUser,
 } from './db.js'
 import { authenticateToken, optionalToken, signToken } from './middleware.js'
 
@@ -26,7 +26,7 @@ router.post('/guest', (req, res) => {
   }
   const user = createGuest(username)
   const token = signToken({ userId: user.id, username: user.username })
-  res.status(201).json({ message: 'Guest session created', token, user: toPublicUser(user) })
+  res.status(201).json({ message: 'Guest session created', token, user: toSelfUser(user) })
 })
 
 /** Signup. If called with a valid guest token, upgrades that guest in place (keeps id/history). */
@@ -55,7 +55,7 @@ router.post('/signup', optionalToken, (req, res) => {
     : createUser(username, email, password)
 
   const token = signToken({ userId: user.id, username: user.username })
-  res.status(201).json({ message: 'Account created successfully', token, user: toPublicUser(user) })
+  res.status(201).json({ message: 'Account created successfully', token, user: toSelfUser(user) })
 })
 
 router.post('/login', (req, res) => {
@@ -71,7 +71,7 @@ router.post('/login', (req, res) => {
 
   setUserOnline(user.id, true)
   const token = signToken({ userId: user.id, username: user.username })
-  res.json({ message: 'Login successful', token, user: toPublicUser(user) })
+  res.json({ message: 'Login successful', token, user: toSelfUser(user) })
 })
 
 router.post('/rename', authenticateToken, (req, res) => {
@@ -85,7 +85,7 @@ router.post('/rename', authenticateToken, (req, res) => {
   }
   const user = updateUsername(req.user!.id, username)
   const token = signToken({ userId: user.id, username: user.username })
-  res.json({ message: 'Username updated', token, user: toPublicUser(user) })
+  res.json({ message: 'Username updated', token, user: toSelfUser(user) })
 })
 
 /** Publish this account's ECDH public key (JWK) for E2E DMs. */
@@ -105,7 +105,7 @@ router.post('/public-key', authenticateToken, (req, res) => {
 })
 
 router.get('/me', authenticateToken, (req, res) => {
-  res.json({ user: toPublicUser(req.user!) })
+  res.json({ user: toSelfUser(req.user!) })
 })
 
 router.post('/logout', authenticateToken, (req, res) => {
