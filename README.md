@@ -1,4 +1,4 @@
-# Beacon 📡
+# Beacon
 
 **Synchronized watch parties and peer-to-peer file sharing, in the browser.**
 
@@ -7,10 +7,6 @@ devices — no install for the people you invite, and no account required to joi
 It's private by design: video, files, voice, and room chat travel peer-to-peer
 between participants while the server only handles signaling and presence.
 Direct messages are end-to-end encrypted.
-
-![Status](https://img.shields.io/badge/Status-Core_Complete-violet)
-![Tests](https://img.shields.io/badge/Tests-30_passing-green)
-![DMs](https://img.shields.io/badge/DMs-E2E_Encrypted-cyan)
 
 ---
 
@@ -146,7 +142,7 @@ TURN relay. See [`QUESTIONS.md`](./QUESTIONS.md) for a free five-minute setup.
 ## Documentation
 
 - [`CLAUDE.md`](./CLAUDE.md) — architecture and engineering notes
-- [`DESIGN.md`](./DESIGN.md) — design direction
+- [`ROADMAP.md`](./ROADMAP.md) — what's done and what's left
 - [`QUESTIONS.md`](./QUESTIONS.md) — open items and TURN setup
 
 ## License

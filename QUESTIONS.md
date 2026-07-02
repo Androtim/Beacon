@@ -1,40 +1,42 @@
 # Beacon — decisions log & open items
 
-Decisions made during the autonomous rebuild, plus what's still open.
+Decisions made during the 2026 rebuild, plus what's still open.
 
 ## Resolved
 
-- **HLS streams (.m3u8): dropped.** You confirmed you don't use them. Native
-  `<video>` (mp4/webm/mov/blob) + YouTube cover all sources. The HLS mention
-  was removed from the UI copy. (If that ever changes, hls.js is ~1 day to add.)
+- **HLS streams (.m3u8): dropped.** Not used in practice. Native `<video>`
+  (mp4/webm/mov/blob) + YouTube cover all sources. The HLS mention was removed
+  from the UI copy. (If that ever changes, hls.js is ~1 day to add.)
 - **Stale branches deleted.** `feat/p2p-stability-and-mobile-ui` and `staging`
   (both pre-rebuild, 0 commits ahead of main) are gone; all merged phase
   branches were auto-deleted. Only `main` remains.
-- **Video controls are host-only**, enforced server-side. Say so if you want an
-  "anyone can control" room option later.
+- **Video source is host-only, playback control is shared.** Setting what plays
+  is enforced server-side as a host decision; play/pause/seek is open to the
+  room. Non-hosts can propose a source via request-to-stream.
 - **Player is native HTML5 video**, not Video.js (Video.js fought the sync
   engine and caused the dispose/recreate crashes).
 - **Chat timestamps are server-assigned** (clients can't forge message times).
 
 ## Known issue — Firefox + the Metered TURN relay
 
-Diagnosed 2026-06-13 from your Chrome-host → Firefox-participant test (it hung
-forever). Two findings:
+Diagnosed 2026-06-13 from a Chrome-host → Firefox-participant test that hung
+forever. Two findings:
 
 1. **Fixed: the infinite "connecting" hang.** P2P connections now time out
-   after 25s (and Firefox's ICE-failure is now detected — we previously only
-   watched `connectionState`, which Firefox doesn't drive). A failed connection
-   shows "Couldn't connect" with Try again / Cancel instead of spinning forever.
-   Applies to both watch-party file sharing and share-code transfers.
+   after 25s (and Firefox's ICE failure is now detected — previously only
+   `connectionState` was watched, which Firefox doesn't drive). A failed
+   connection shows "Couldn't connect" with Try again / Cancel instead of
+   spinning forever. Applies to both watch-party file sharing and share-code
+   transfers.
 
-2. **Open: Firefox can't use the current TURN relay.** Testing showed Chromium
-   gathers relay candidates from `standard.relay.metered.ca` fine, but **Firefox
-   gets zero** on every transport (80/443, udp/tcp/tls). So Chrome↔Firefox (and
-   Firefox on a restrictive network) can't connect via relay. Chrome↔Chrome and
-   same-network cases are unaffected. Likely the free shared Metered relay; next
-   step is to try a different TURN provider/credentials and re-test Firefox, or
-   confirm on two real machines on different networks. Not a code bug — a relay
-   reachability gap.
+2. **Open: Firefox can't use the current TURN relay.** Chromium gathers relay
+   candidates from `standard.relay.metered.ca` fine, but Firefox gets zero on
+   every transport (80/443, udp/tcp/tls). So Chrome↔Firefox (and Firefox on a
+   restrictive network) can't connect via relay. Chrome↔Chrome and same-network
+   cases are unaffected. Likely the free shared Metered relay; next step is a
+   different TURN provider/credentials and a Firefox re-test, or a check on two
+   real machines on different networks. Not a code bug — a relay reachability
+   gap.
 
 ## Still open
 
@@ -55,18 +57,19 @@ mobile-carrier NATs need a relay. Setup is ~5 minutes and free:
 4. Restart the server. The `/api/ice-servers` endpoint already picks these up
    and hands them to every browser automatically — no code change needed.
 
-(I can't do step 1–2: it needs an email signup. Everything after is wired.)
+The signup needs an email account, so it can't be automated; everything after
+is wired.
 
-### 2. Deferred to Phase 5 (UI/PWA)
+### 2. Deferred to the UI/PWA phase
 
 - **DM key backup** — encryption keys are per-device today (a new device can't
-  read old messages). The passphrase-protected backup you approved needs UI.
+  read old messages). The planned passphrase-protected backup needs UI.
 - **Device-only DM delivery toggle** — right now undelivered messages park on
   the server as ciphertext (mailbox always on). Making device-only the default
   needs local-first history. Either way the server can't read anything.
 
-## Note for Phase 5
+## Note for the UI phase
 
 UI overhaul + PWA is the last phase and is intentionally not started — it needs
-your design direction. DESIGN.md says "premium, dark-first, glassmorphism";
-confirm or redirect when ready.
+design direction (current lean: dark-first with the Crystal Beacon token
+system). Confirm or redirect when ready.
