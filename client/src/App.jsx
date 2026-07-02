@@ -14,7 +14,11 @@ import Messages from './pages/Messages'
 import Profile from './pages/Profile'
 import Leaderboard from './pages/Leaderboard'
 import Layout from './components/Layout'
+import { sweepOrphanedTransfers } from './lib/p2p/transfer'
 import { Gem, AlertTriangle, RefreshCw } from 'lucide-react'
+
+// Reclaim disk from transfers abandoned more than a week ago.
+sweepOrphanedTransfers()
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()

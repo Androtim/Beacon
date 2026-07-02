@@ -117,6 +117,31 @@ export async function cleanupTransfer(transferId, fileCount = 32) {
   }
 }
 
+const ORPHAN_AGE_MS = 7 * 24 * 60 * 60 * 1000
+
+/**
+ * Delete part-files nothing has touched in a week. Resume depends on parts
+ * surviving reloads, so only age qualifies one as abandoned — anything being
+ * written has a fresh lastModified and is left alone.
+ */
+export async function sweepOrphanedTransfers(maxAgeMs = ORPHAN_AGE_MS) {
+  if (!opfsSupported()) return 0
+  try {
+    const root = await navigator.storage.getDirectory()
+    const dir = await root.getDirectoryHandle('beacon-transfers')
+    const stale = []
+    for await (const [name, handle] of dir.entries()) {
+      if (handle.kind !== 'file' || !name.endsWith('.part')) continue
+      const file = await handle.getFile()
+      if (Date.now() - file.lastModified > maxAgeMs) stale.push(name)
+    }
+    for (const name of stale) await dir.removeEntry(name).catch(() => {})
+    return stale.length
+  } catch {
+    return 0 // directory doesn't exist yet, or OPFS is unavailable
+  }
+}
+
 // ---------- Sender ----------
 
 /**
@@ -235,8 +260,27 @@ export function createReceiver({ channel, transferId, onManifest, onProgress, on
   const received = new Map() // fileIndex -> contiguous chunks received
   const finished = new Set()
 
+  // The manifest comes from the remote peer; a hostile one could announce a
+  // tiny size but write chunks at huge offsets (sparse-file disk exhaustion).
+  // Pin every write to the announced geometry.
+  const MAX_CHUNK_SIZE = 4 * 1024 * 1024
+  function validMeta(meta) {
+    return Number.isInteger(meta.size) && meta.size >= 0
+      && Number.isInteger(meta.chunkSize) && meta.chunkSize > 0 && meta.chunkSize <= MAX_CHUNK_SIZE
+      && meta.totalChunks === Math.max(1, Math.ceil(meta.size / meta.chunkSize))
+  }
+
+  function safeName(name) {
+    const base = String(name).split(/[/\\]/).pop().replace(/[\u0000-\u001f]/g, '').trim()
+    return base && base !== '.' && base !== '..' ? base : 'download'
+  }
+
   async function handleManifest(msg) {
-    metas = msg.files
+    if (!Array.isArray(msg.files) || !msg.files.every(validMeta)) {
+      onError?.(new Error('sender announced an invalid file manifest'))
+      return
+    }
+    metas = msg.files.map((m) => ({ ...m, name: safeName(m.name) }))
     const have = {}
     for (const meta of metas) {
       const store = await createFileStore(transferId, meta)
@@ -277,6 +321,7 @@ export function createReceiver({ channel, transferId, onManifest, onProgress, on
       const meta = metas?.find((m) => m.i === fileIndex)
       const store = stores.get(fileIndex)
       if (!meta || !store || finished.has(fileIndex)) return
+      if (chunkIndex >= meta.totalChunks) return // out-of-range write attempt
 
       // Copy out of the frame so the buffer can be transferred to the worker.
       const bytes = event.data.slice(HEADER_BYTES)

@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useRef, useCallback, useEffect } f
 import { useSocket } from '../hooks/useSocket'
 import { useFileTransfer } from '../hooks/useFileTransfer'
 import { cleanupTransfer } from '../lib/p2p/transfer'
+import { randomCode } from '../lib/randomCode'
 import JSZip from 'jszip'
 
 // App-level home for a share-code file transfer. Living here (above the router)
@@ -80,7 +81,7 @@ export function TransfersProvider({ children }) {
     if (!files.length || !socket) return
     setSelectedFiles(files)
     filesRef.current = files
-    const code = Math.random().toString(36).substring(2, 10).toUpperCase()
+    const code = randomCode(8)
     setShareCode(code)
     setMode('sharing')
     socket.emit('file-share-create', { code, files: files.map((f) => ({ name: f.name, size: f.size, type: f.type })) })
