@@ -111,6 +111,12 @@ export async function createStreamUrl(channel, key, meta) {
     const body = event.data.slice(FRAME_HEADER)
     req.parts.push(body)
     req.received += body.byteLength
+    // A host that keeps sending past what was asked for would otherwise
+    // accumulate in RAM until the timeout. Drop the request instead.
+    if (req.received > req.expected) {
+      inflight.delete(reqId)
+      req.reject(new Error('host sent more than the requested range'))
+    }
   }
 
   channel.onclose = () => {
@@ -122,7 +128,7 @@ export async function createStreamUrl(channel, key, meta) {
     return new Promise((resolve, reject) => {
       if (channel.readyState !== 'open') return reject(new Error('stream channel not open'))
       const reqId = nextReqId++
-      inflight.set(reqId, { parts: [], received: 0, resolve, reject })
+      inflight.set(reqId, { parts: [], received: 0, expected: end - start, resolve, reject })
       channel.send(JSON.stringify({ t: 'range', reqId, start, end }))
       setTimeout(() => {
         if (inflight.delete(reqId)) reject(new Error('range timed out'))

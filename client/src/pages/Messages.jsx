@@ -6,6 +6,7 @@ import { Send, Search, User, Users, ArrowLeft, MessageSquare, ShieldAlert, Paper
 import axios from 'axios'
 import { getOrCreateKeyPair, encryptMessage, decryptMessage, isEnvelope, encryptGroupMessage, decryptGroupMessage } from '../lib/dmCrypto'
 import { useDmFiles } from '../hooks/useDmFiles'
+import { randomCode } from '../lib/randomCode'
 import { useGroups } from '../hooks/useGroups'
 import { useGroupFiles } from '../hooks/useGroupFiles'
 import { formatFileSize as formatSize } from '../context/TransfersContext'
@@ -42,7 +43,7 @@ export default function Messages() {
   }, [socket])
 
   const startPartyWith = (peer) => {
-    const roomId = Math.random().toString(36).substring(2, 8).toUpperCase()
+    const roomId = randomCode(6)
     socket.emit('dm-party-invite', { to: peer.id, roomId })
     navigate(`/party/${roomId}`)
   }

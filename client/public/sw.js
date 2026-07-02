@@ -64,13 +64,17 @@ self.addEventListener('fetch', (event) => {
   event.respondWith((async () => {
     try {
       const bytes = await fetchRangeFromClient(entry, key, start, end + 1)
+      // The mime comes from the sharing peer — only honor real media types so
+      // a peer can't serve arbitrary typed content from this origin.
+      const mime = /^(video|audio)\/[\w.+-]+$/.test(entry.mime) ? entry.mime : 'video/mp4'
       return new Response(bytes, {
         status: 206,
         headers: {
-          'Content-Type': entry.mime || 'video/mp4',
+          'Content-Type': mime,
           'Content-Length': String(bytes.byteLength),
           'Content-Range': `bytes ${start}-${start + bytes.byteLength - 1}/${entry.size}`,
           'Accept-Ranges': 'bytes',
+          'X-Content-Type-Options': 'nosniff',
         },
       })
     } catch (err) {
