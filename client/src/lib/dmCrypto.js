@@ -7,9 +7,11 @@
 // envelope `{v:1, iv, ct}` and physically cannot read it. Sender and
 // recipient derive the same key, so both can read the conversation history.
 //
-// Known limitation (documented in QUESTIONS.md): keys are per-device. A new
-// device generates a new keypair and cannot read old ciphertext (passphrase
-// key backup is a planned follow-up).
+// Keys are per-device by default. To move history to another device, a user
+// can export a passphrase-encrypted backup of their private key (see
+// exportKeyBackup / importKeyBackup below). Keys are therefore generated
+// extractable — but the private key still only ever leaves the device through
+// that explicit, passphrase-gated action, never over the network.
 
 const DB_NAME = 'beacon-keys'
 const STORE = 'keys'
@@ -50,7 +52,7 @@ export async function getOrCreateKeyPair(userId) {
 
   const pair = await crypto.subtle.generateKey(
     { name: 'ECDH', namedCurve: 'P-256' },
-    false, // private key not extractable — it cannot leave this device
+    true, // extractable, so the key can be backed up under a passphrase
     ['deriveKey'],
   )
   const publicJwk = await crypto.subtle.exportKey('jwk', pair.publicKey)
@@ -155,4 +157,85 @@ export async function decryptGroupMessage(myPrivateKey, members, myId, senderId,
     }
   }
   return '🔒 (sent to another device)'
+}
+
+// ---------- Passphrase key backup ----------
+//
+// DM keys are per-device: a new device can't read old messages. Backup lets a
+// user carry their private key to another device, protected by a passphrase.
+// The key JWK is encrypted with AES-256-GCM under a key derived from the
+// passphrase via PBKDF2 (200k iterations, SHA-256, random salt). The resulting
+// blob is safe to store or send — it's useless without the passphrase.
+//
+// Keys are generated extractable so this export is possible. The private key
+// still only ever leaves the device through this explicit, passphrase-gated
+// action — never over the network, never to the server.
+
+const KDF_ITERATIONS = 200_000
+
+async function deriveBackupKey(passphrase, salt, usage) {
+  const material = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, ['deriveKey'],
+  )
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: KDF_ITERATIONS, hash: 'SHA-256' },
+    material,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    usage,
+  )
+}
+
+/**
+ * Encrypt this device's DM private key under `passphrase`. Returns a JSON
+ * string blob the user can save. Throws if the key predates backup support
+ * (older keys were generated non-extractable).
+ */
+export async function exportKeyBackup(userId, passphrase) {
+  if (!passphrase || passphrase.length < 8) throw new Error('Use a passphrase of at least 8 characters')
+  const record = await idbGet(`ecdh-${userId}`)
+  if (!record) throw new Error('No message key on this device yet')
+  let privateJwk
+  try {
+    privateJwk = await crypto.subtle.exportKey('jwk', record.privateKey)
+  } catch {
+    throw new Error('This device’s key predates backup support and can’t be exported')
+  }
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const key = await deriveBackupKey(passphrase, salt, ['encrypt'])
+  const payload = new TextEncoder().encode(JSON.stringify({ userId, privateJwk, publicJwk: record.publicJwk }))
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, payload)
+  return JSON.stringify({ v: 1, kdf: 'PBKDF2', it: KDF_ITERATIONS, salt: b64(salt), iv: b64(iv), ct: b64(ct) })
+}
+
+/**
+ * Decrypt a backup blob with `passphrase` and install the key on this device
+ * (overwriting any existing key for this user). Returns the imported public
+ * JWK so the caller can republish it. Throws on a wrong passphrase or a blob
+ * for a different account.
+ */
+export async function importKeyBackup(userId, passphrase, blob) {
+  let parsed
+  try {
+    parsed = JSON.parse(blob)
+  } catch {
+    throw new Error('That doesn’t look like a backup file')
+  }
+  if (parsed.v !== 1 || !parsed.salt || !parsed.iv || !parsed.ct) throw new Error('Unrecognized backup format')
+  const key = await deriveBackupKey(passphrase, unb64(parsed.salt), ['decrypt'])
+  let plain
+  try {
+    plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(parsed.iv) }, key, unb64(parsed.ct))
+  } catch {
+    throw new Error('Wrong passphrase, or the backup is corrupted')
+  }
+  const data = JSON.parse(new TextDecoder().decode(plain))
+  if (data.userId !== userId) throw new Error('This backup belongs to a different account')
+  const privateKey = await crypto.subtle.importKey(
+    'jwk', data.privateJwk, { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey'],
+  )
+  await idbSet(`ecdh-${userId}`, { privateKey, publicJwk: data.publicJwk })
+  keyCache.clear() // shared-key cache is keyed on the other party, not us, but be safe
+  return data.publicJwk
 }
