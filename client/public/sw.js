@@ -10,8 +10,25 @@
 const streams = new Map() // key -> { size, mime, clientId }
 const MAX_WINDOW = 2 * 1024 * 1024 // cap each 206 response; browser follows up
 
-self.addEventListener('install', () => self.skipWaiting())
-self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()))
+// App-shell cache, so an installed PWA opens offline. Bump the version to
+// invalidate old entries on the next activate. Hashed build assets are
+// immutable, so caching them is safe; the HTML shell is refreshed
+// network-first below.
+const SHELL_CACHE = 'beacon-shell-v1'
+const SHELL_URLS = ['/', '/index.html', '/favicon.svg', '/manifest.webmanifest']
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(SHELL_CACHE).then((c) => c.addAll(SHELL_URLS)).catch(() => {}).then(() => self.skipWaiting()),
+  )
+})
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((k) => k !== SHELL_CACHE).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim()),
+  )
+})
 
 self.addEventListener('message', (event) => {
   const { t } = event.data ?? {}
@@ -41,6 +58,44 @@ async function fetchRangeFromClient(entry, key, start, end) {
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
+
+  // App-shell caching for same-origin GETs — but never the P2P stream, the
+  // API, or the socket transport, which must always hit the live server/peer.
+  if (
+    event.request.method === 'GET' &&
+    url.origin === self.location.origin &&
+    !url.pathname.startsWith('/p2p/') &&
+    !url.pathname.startsWith('/api/') &&
+    !url.pathname.startsWith('/socket.io/')
+  ) {
+    if (event.request.mode === 'navigate') {
+      // Network-first for navigations so a fresh shell wins when online, with
+      // the cached shell as the offline fallback.
+      event.respondWith(
+        fetch(event.request).catch(() => caches.match('/index.html').then((r) => r ?? Response.error())),
+      )
+      return
+    }
+    // Cache-first only for content-hashed build assets — never media, and
+    // never a Range request (partial responses would corrupt the cache and
+    // break video seeking).
+    const isAsset = /\.(js|mjs|css|woff2?|svg|png|ico|webmanifest)$/.test(url.pathname)
+    if (isAsset && !event.request.headers.has('range')) {
+      event.respondWith(
+        caches.match(event.request).then((hit) =>
+          hit ?? fetch(event.request).then((res) => {
+            if (res.ok && res.type === 'basic') {
+              const copy = res.clone()
+              caches.open(SHELL_CACHE).then((c) => c.put(event.request, copy)).catch(() => {})
+            }
+            return res
+          }),
+        ),
+      )
+    }
+    return
+  }
+
   if (!url.pathname.startsWith('/p2p/')) return
   const key = url.pathname.slice('/p2p/'.length)
   const entry = streams.get(key)
