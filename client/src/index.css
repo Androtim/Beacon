@@ -11,21 +11,21 @@
 
 @layer base {
   :root {
-    /* Crystal (dark) defaults — match PRESETS.crystal so first paint is right. */
+    /* Crystal (dark) defaults — match PRESETS.crystal so first paint is right.
+       Night-sky neutrals; the coral accent is the light in the dark. */
     --accent: 242 126 114;        /* coral #f27e72 — the guiding light */
-    --accent-2: 139 110 209;      /* crystal violet */
-    --bg-primary: #0E0A1A;        /* night */
-    --bg-secondary: #1A1233;      /* background glow */
-    --surface: #1A1330;
-    --surface-raised: #241A3D;
-    --text-primary: #F3EEFF;
-    --text-secondary: #A99FC9;
-    --radius: 16px;
-    --glow-strength: 0.5;
+    --accent-2: 122 148 187;      /* muted sapphire */
+    --bg-primary: #10131A;        /* night */
+    --bg-secondary: #171C26;
+    --surface: #161A23;
+    --surface-raised: #1D222E;
+    --text-primary: #EDEFF3;
+    --text-secondary: #929BAD;
+    --radius: 10px;
+    --glow-strength: 0.25;
 
     /* Derived */
     --border: rgba(255, 255, 255, 0.08);
-    --glass-bg: color-mix(in srgb, var(--surface) 72%, transparent);
   }
 
   * {
@@ -36,10 +36,9 @@
     background-color: var(--bg-primary);
     color: var(--text-primary);
     @apply antialiased font-sans;
-    /* The beacon: warm light blooming from below, crystal glow from above. */
+    /* A single faint warm cast low on the page — the light on the horizon. */
     background-image:
-      radial-gradient(60rem 60rem at 85% -10%, rgb(var(--accent-2) / 0.16), transparent 60%),
-      radial-gradient(50rem 50rem at 10% 110%, rgb(var(--accent) / 0.14), transparent 55%);
+      radial-gradient(55rem 40rem at 50% 115%, rgb(var(--accent) / 0.07), transparent 60%);
     background-attachment: fixed;
     overflow-x: hidden;
   }
@@ -47,34 +46,22 @@
   ::-webkit-scrollbar { width: 7px; height: 7px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb {
-    background: rgb(var(--accent-2) / 0.3);
+    background: rgba(255, 255, 255, 0.14);
     border-radius: 9999px;
   }
-  ::-webkit-scrollbar-thumb:hover { background: rgb(var(--accent-2) / 0.5); }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.24); }
 
   ::selection { background: rgb(var(--accent) / 0.3); color: var(--text-primary); }
 }
 
 @layer components {
+  /* Kept the historical name; it's a plain card now (solid, bordered). */
   .glass-card {
-    background: var(--glass-bg);
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    box-shadow: 0 8px 40px -8px rgba(0, 0, 0, 0.45);
-    @apply transition-all duration-300;
-  }
-
-  /* Ambient glowing orbs (decorative). */
-  .orb {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(120px);
-    z-index: 0;
-    pointer-events: none;
-    opacity: var(--glow-strength);
-    animation: float 22s infinite alternate ease-in-out;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    @apply transition-colors duration-200;
   }
 
   .btn {
@@ -85,14 +72,14 @@
   }
   .btn:focus-visible { box-shadow: 0 0 0 3px rgb(var(--accent) / 0.35); }
 
-  /* The light: coral, with a glow that scales to the user's glow setting. */
+  /* The light: flat coral. Glow only if the user turns it up. */
   .btn-primary {
-    background: linear-gradient(135deg, rgb(var(--accent)) 0%, rgb(var(--accent) / 0.85) 100%);
+    background: rgb(var(--accent));
     color: #1a0f0d;
-    box-shadow: 0 6px 24px -6px rgb(var(--accent) / calc(var(--glow-strength) * 0.9));
-    @apply font-extrabold;
+    box-shadow: 0 4px 16px -6px rgb(var(--accent) / var(--glow-strength));
+    @apply font-bold;
   }
-  .btn-primary:hover { filter: brightness(1.08); box-shadow: 0 8px 32px -6px rgb(var(--accent) / var(--glow-strength)); }
+  .btn-primary:hover { filter: brightness(1.06); }
 
   .btn-secondary {
     background: var(--surface-raised);
@@ -126,30 +113,20 @@
   .nav-item.active::before {
     content: '';
     position: absolute; left: -10px; top: 50%; transform: translateY(-50%);
-    width: 4px; height: 60%; border-radius: 9999px;
+    width: 3px; height: 60%; border-radius: 9999px;
     background: rgb(var(--accent));
-    box-shadow: 0 0 12px rgb(var(--accent) / 0.9);
   }
 
-  /* The beacon mark — a glowing crystal. */
+  /* The beacon mark — the one place the light gets to shine. */
   .beacon-mark {
-    background: linear-gradient(140deg, rgb(var(--accent)) 0%, rgb(var(--accent-2)) 100%);
-    box-shadow: 0 0 20px -2px rgb(var(--accent) / var(--glow-strength));
+    background: rgb(var(--accent));
+    box-shadow: 0 0 16px -2px rgb(var(--accent) / var(--glow-strength));
   }
 }
 
 @layer utilities {
-  .text-gradient {
-    background: linear-gradient(120deg, rgb(var(--accent)), rgb(var(--accent-2)));
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-  }
-  .beacon-glow { box-shadow: 0 0 32px -6px rgb(var(--accent) / var(--glow-strength)); }
-}
-
-@keyframes float {
-  0% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(28px, -44px) scale(1.08); }
-  100% { transform: translate(-18px, 18px) scale(0.96); }
+  .text-accent { color: rgb(var(--accent)); }
+  .beacon-glow { box-shadow: 0 0 24px -6px rgb(var(--accent) / var(--glow-strength)); }
 }
 
 @keyframes beacon-pulse {

@@ -25,12 +25,11 @@ function ProtectedRoute({ children }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden" style={{ background: 'var(--bg-primary)' }}>
-        <div className="orb w-[320px] h-[320px] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" style={{ background: 'rgb(var(--accent) / 0.4)' }} />
-        <div className="beacon-mark w-14 h-14 rounded-2xl grid place-items-center animate-beacon relative z-10">
-          <Gem size={26} className="text-white" />
+      <div className="min-h-screen flex flex-col items-center justify-center" style={{ background: 'var(--bg-primary)' }}>
+        <div className="beacon-mark w-12 h-12 rounded-xl grid place-items-center animate-beacon">
+          <Gem size={22} className="text-white" />
         </div>
-        <p className="mt-5 text-xs font-bold tracking-[0.25em] uppercase relative z-10" style={{ color: 'var(--text-secondary)' }}>
+        <p className="mt-5 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
           Lighting the beacon…
         </p>
       </div>
@@ -53,19 +52,16 @@ class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-[#0F172A] text-white flex items-center justify-center p-6">
-           <div className="glass-card max-w-md w-full p-10 text-center border-red-500/20">
-              <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-red-500/20">
-                 <AlertTriangle className="h-8 w-8 text-red-400" />
+        <div className="min-h-screen flex items-center justify-center p-6" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+           <div className="glass-card max-w-md w-full p-10 text-center">
+              <div className="w-14 h-14 rounded-xl flex items-center justify-center mx-auto mb-6" style={{ background: 'rgb(var(--accent) / 0.12)' }}>
+                 <AlertTriangle className="h-7 w-7" style={{ color: 'rgb(var(--accent))' }} />
               </div>
-              <h1 className="text-2xl font-bold mb-4">Critical System Error</h1>
-              <p className="text-slate-400 text-sm mb-8 font-mono">{this.state.error?.message || 'Kernel panic detected.'}</p>
-              <button 
-                onClick={() => window.location.reload()} 
-                className="w-full glass-button !from-red-600 !to-red-500 shadow-red-500/20"
-              >
+              <h1 className="text-xl font-bold mb-3">Something went wrong</h1>
+              <p className="text-sm mb-8 font-mono" style={{ color: 'var(--text-secondary)' }}>{this.state.error?.message || 'An unexpected error broke the page.'}</p>
+              <button onClick={() => window.location.reload()} className="btn btn-primary w-full">
                 <RefreshCw className="h-4 w-4 mr-2" />
-                REBOOT SYSTEM
+                Reload
               </button>
            </div>
         </div>

@@ -79,3 +79,5 @@ sessions/
 __pycache__/
 *.py[cod]
 *$py.class
+# Claude Code local settings (machine-specific permissions)
+.claude/settings.local.json

@@ -29,31 +29,31 @@ export const PRESETS = {
     mode: 'dark',
     tokens: {
       '--accent': '242 126 114', // coral #f27e72 — the guiding light
-      '--accent-2': '139 110 209', // lifted crystal violet
-      '--bg-primary': '#0E0A1A',
-      '--bg-secondary': '#1A1233',
-      '--surface': '#1A1330',
-      '--surface-raised': '#241A3D',
-      '--text-primary': '#F3EEFF',
-      '--text-secondary': '#A99FC9',
-      '--radius': '16px',
-      '--glow-strength': '0.5',
+      '--accent-2': '122 148 187', // muted sapphire
+      '--bg-primary': '#10131A',
+      '--bg-secondary': '#171C26',
+      '--surface': '#161A23',
+      '--surface-raised': '#1D222E',
+      '--text-primary': '#EDEFF3',
+      '--text-secondary': '#929BAD',
+      '--radius': '10px',
+      '--glow-strength': '0.25',
     },
   },
   midnight: {
     label: 'Midnight',
     mode: 'dark',
     tokens: {
-      '--accent': '139 110 209', // violet-forward
-      '--accent-2': '99 102 241',
-      '--bg-primary': '#0A0A14',
-      '--bg-secondary': '#14122B',
-      '--surface': '#15152A',
-      '--surface-raised': '#1F1F3D',
-      '--text-primary': '#EDEFFF',
-      '--text-secondary': '#8E92B8',
-      '--radius': '12px',
-      '--glow-strength': '0.4',
+      '--accent': '124 156 205', // sapphire-forward
+      '--accent-2': '92 112 148',
+      '--bg-primary': '#0C0F16',
+      '--bg-secondary': '#121724',
+      '--surface': '#111622',
+      '--surface-raised': '#18202F',
+      '--text-primary': '#E9EDF5',
+      '--text-secondary': '#8791A6',
+      '--radius': '8px',
+      '--glow-strength': '0.2',
     },
   },
   ember: {
@@ -61,31 +61,31 @@ export const PRESETS = {
     mode: 'dark',
     tokens: {
       '--accent': '247 126 114', // warmer coral
-      '--accent-2': '245 166 35', // amber
-      '--bg-primary': '#140C12',
-      '--bg-secondary': '#27141C',
-      '--surface': '#1F141C',
-      '--surface-raised': '#2C1D27',
-      '--text-primary': '#FBEFEA',
-      '--text-secondary': '#C4A79E',
-      '--radius': '20px',
-      '--glow-strength': '0.65',
+      '--accent-2': '215 158 74', // lantern amber
+      '--bg-primary': '#15100E',
+      '--bg-secondary': '#201714',
+      '--surface': '#1C1512',
+      '--surface-raised': '#251C18',
+      '--text-primary': '#F5EEE9',
+      '--text-secondary': '#B3A296',
+      '--radius': '12px',
+      '--glow-strength': '0.4',
     },
   },
   daylight: {
     label: 'Daylight',
     mode: 'light',
     tokens: {
-      '--accent': '232 90 76', // coral that reads on light
-      '--accent-2': '109 79 160',
-      '--bg-primary': '#FAF8FF',
-      '--bg-secondary': '#EEE8FB',
+      '--accent': '224 82 68', // coral that reads on light
+      '--accent-2': '86 110 146',
+      '--bg-primary': '#F7F7F5',
+      '--bg-secondary': '#EDEDEA',
       '--surface': '#FFFFFF',
-      '--surface-raised': '#F5F1FE',
-      '--text-primary': '#1E1633',
-      '--text-secondary': '#6B6385',
-      '--radius': '16px',
-      '--glow-strength': '0.25',
+      '--surface-raised': '#F1F1EE',
+      '--text-primary': '#22252B',
+      '--text-secondary': '#6A7180',
+      '--radius': '10px',
+      '--glow-strength': '0.1',
     },
   },
 }

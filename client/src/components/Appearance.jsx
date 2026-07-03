@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useTheme } from '../context/ThemeContext'
 import { TOKENS } from '../lib/themes'
-import { Sparkles, SlidersHorizontal, Code2, Sun, Moon, Check, Copy, AlertTriangle, Zap, Save, Undo2 } from 'lucide-react'
+import { Palette, SlidersHorizontal, Code2, Sun, Moon, Check, Copy, AlertTriangle, Zap, Save, Undo2 } from 'lucide-react'
 
 const MODES = [
-  { id: 'easy', label: 'Easy', icon: Sparkles, hint: 'Presets & basics' },
+  { id: 'easy', label: 'Easy', icon: Palette, hint: 'Presets & basics' },
   { id: 'advanced', label: 'Advanced', icon: SlidersHorizontal, hint: 'Fine-tune tokens' },
   { id: 'tinkerer', label: 'Tinkerer', icon: Code2, hint: 'Full control' },
 ]

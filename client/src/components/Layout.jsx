@@ -45,8 +45,6 @@ export default function Layout({ children }) {
   if (isAuthPage) {
     return (
       <div className="relative min-h-screen overflow-hidden flex items-center justify-center" style={{ background: 'var(--bg-primary)' }}>
-        <div className="orb w-[460px] h-[460px] top-[-160px] left-[-110px]" style={{ background: 'rgb(var(--accent-2) / 0.5)' }} />
-        <div className="orb w-[460px] h-[460px] bottom-[-160px] right-[-110px]" style={{ background: 'rgb(var(--accent) / 0.45)' }} />
         <div className="absolute top-6 right-6 z-50">
           <button onClick={toggleTheme} className="btn btn-ghost h-11 w-11 !px-0" aria-label="Toggle theme">
             {mode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
@@ -59,9 +57,6 @@ export default function Layout({ children }) {
 
   return (
     <div className="min-h-screen relative overflow-hidden">
-      <div className="orb w-[360px] h-[360px] top-[-120px] left-[120px]" style={{ background: 'rgb(var(--accent-2) / 0.4)' }} />
-      <div className="orb w-[320px] h-[320px] bottom-[40px] right-[-40px]" style={{ background: 'rgb(var(--accent) / 0.35)' }} />
-
       <div className="relative z-10 flex min-h-screen">
         {/* Lighthouse rail (desktop) */}
         <aside
@@ -85,7 +80,7 @@ export default function Layout({ children }) {
             <BeaconMark />
             {!collapsed && (
               <span className="text-lg font-extrabold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-                Beacon<span className="text-gradient">.</span>
+                Beacon<span className="text-accent">.</span>
               </span>
             )}
           </Link>
@@ -208,10 +203,10 @@ export default function Layout({ children }) {
 
         {/* Mobile top bar */}
         <header className="md:hidden fixed top-0 inset-x-0 z-40 h-14 px-4 flex items-center justify-between backdrop-blur-xl border-b"
-          style={{ background: 'var(--glass-bg)', borderColor: 'var(--border)' }}>
+          style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
           <Link to="/" className="flex items-center gap-2.5">
             <BeaconMark size="sm" />
-            <span className="font-extrabold tracking-tight" style={{ color: 'var(--text-primary)' }}>Beacon<span className="text-gradient">.</span></span>
+            <span className="font-extrabold tracking-tight" style={{ color: 'var(--text-primary)' }}>Beacon<span className="text-accent">.</span></span>
           </Link>
           <div className="flex items-center gap-1">
             <button onClick={toggleTheme} className="btn btn-ghost h-10 w-10 !px-0" aria-label="Toggle theme">
@@ -226,7 +221,7 @@ export default function Layout({ children }) {
 
         {/* Mobile bottom tabs */}
         <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 h-16 grid backdrop-blur-xl border-t"
-          style={{ background: 'var(--glass-bg)', borderColor: 'var(--border)', gridTemplateColumns: `repeat(${SPACES.length}, minmax(0, 1fr))` }}>
+          style={{ background: 'var(--surface)', borderColor: 'var(--border)', gridTemplateColumns: `repeat(${SPACES.length}, minmax(0, 1fr))` }}>
           {SPACES.map(({ to, label, icon: Icon, match }) => (
             <Link key={to} to={to} className="flex flex-col items-center justify-center gap-1 transition-colors"
               style={{ color: match(path) ? 'rgb(var(--accent))' : 'var(--text-secondary)' }}>
