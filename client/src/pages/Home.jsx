@@ -1,6 +1,6 @@
 import { useAuth } from '../context/AuthContext'
 import Launcher from '../components/Launcher'
-import { Sparkles, Tv, FolderUp, MessageSquare } from 'lucide-react'
+import { Tv, FolderUp, MessageSquare } from 'lucide-react'
 
 export default function Home() {
   const { user } = useAuth()
@@ -8,12 +8,11 @@ export default function Home() {
   return (
     <div className="max-w-[920px] mx-auto px-5 sm:px-8 py-12 sm:py-20">
       <header className="mb-8 sm:mb-10">
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-5 text-[11px] font-bold"
-          style={{ background: 'rgb(var(--accent) / 0.12)', color: 'rgb(var(--accent))' }}>
-          <Sparkles size={13} /> Welcome back, {user?.username}
-        </div>
+        <p className="mb-3 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+          Welcome back, {user?.username}
+        </p>
         <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-[1.05]" style={{ color: 'var(--text-primary)' }}>
-          Watch, share, and<br /><span className="text-gradient">hang out</span> — together.
+          Watch, share, and<br />hang out — <span className="text-accent">together</span>.
         </h1>
         <p className="mt-4 max-w-md text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
           Start something new, or paste a code a friend sent you. No downloads, no account needed.
