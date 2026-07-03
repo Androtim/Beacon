@@ -1,6 +1,6 @@
 # Beacon Roadmap
 
-Where the project stands and everything left to do. Updated 2026-07-03.
+Where the project stands and everything left to do. Updated 2026-07-04.
 
 ## Done
 
@@ -27,28 +27,29 @@ Where the project stands and everything left to do. Updated 2026-07-03.
 - **Cinema mode** — pure-CSS lights-down while playing.
 - **Reliability** — P2P connections fail gracefully with a clear error + retry
   (no more infinite spinner); shared playback control (anyone can pause/seek).
-- **Deployed** — live on an Oracle Cloud free VM behind Caddy (HTTPS), systemd,
-  SQLite on a persistent path. See `deploy/DEPLOY.md`.
+- **Multi-device** — one account can be connected from several devices at once;
+  DMs, offers, invites, and presence track all of them.
+- **DM key backup** — passphrase-encrypted export/restore of the message key,
+  so history can move to a new device.
+- **Installable PWA** — web manifest, app icon, and an offline app shell.
+- **Hardening** — audited and patched: no email leakage, proxy-aware rate
+  limits, hostile-peer defenses in the P2P receiver (with regression tests),
+  clean dependency audit enforced in CI.
+- **UI** — pared back from the templated look to a restrained, neutral theme;
+  all panels on the design tokens; own favicon.
+- **Ops** — nightly SQLite backup script; CI runs typecheck, build, and audit.
+- **Deployed** — live on an Oracle Cloud free VM behind Caddy (HTTPS + security
+  headers), systemd, SQLite on a persistent path. See `deploy/DEPLOY.md`.
 
 ## Remaining
-
-### UI polish
-- [ ] The inner FileShare, VideoFileSharing, and Voice panels still carry
-      pre-design-system blue/green accents.
-- [ ] Replace the default Vite favicon with a real one.
 
 ### Connectivity
 - [ ] Firefox + TURN: the free Metered relay gives Firefox zero relay
       candidates (see QUESTIONS.md). Try another provider and verify on two
-      real devices on different networks.
-
-### PWA
-- [ ] Installable app: manifest, icons, offline shell ("add to home screen").
-- [ ] (Optional, later) Tauri desktop wrapper from the same web code.
+      real devices on different networks. (Needs a provider account.)
 
 ### Smaller debt
-- [ ] DM key backup (passphrase) + device-only delivery toggle (deferred from
-      the DM work).
-- [ ] OPFS cleanup sweep for abandoned partial transfers.
+- [ ] Device-only DM delivery toggle (deferred from the DM work).
 - [ ] Swap the temporary hostname for a real (sub)domain when one is
       available: edit the Caddyfile site line + ALLOWED_ORIGINS, reload Caddy.
+- [ ] (Optional, later) Tauri desktop wrapper from the same web code.
