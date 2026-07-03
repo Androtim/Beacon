@@ -31,7 +31,12 @@ Direct messages are end-to-end encrypted.
   or host immediately. Accounts add direct messages, a persistent identity, and
   stats.
 - End-to-end encrypted DMs (ECDH P-256 + AES-GCM); the server stores only
-  ciphertext it cannot read.
+  ciphertext it cannot read. Keys are per-device, with a passphrase-protected
+  backup to carry your history to another device.
+- Use one account from several devices at once; messages reach all of them.
+
+**Installable** — Beacon is a PWA: install it from the browser's address bar
+for an app window and an offline shell.
 
 ---
 
