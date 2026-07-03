@@ -144,13 +144,18 @@ systemctl restart beacon && systemctl reload caddy
 
 ## Backups
 
-The whole app state is one SQLite file. Back it up safely with:
+The whole app state is one SQLite file. `deploy/backup-beacon.sh` takes an
+online snapshot (safe while the server writes), keeps 14 days, and prunes the
+rest. Install it on a nightly cron:
 
 ```bash
-sqlite3 /opt/beacon/data/beacon.db ".backup '/opt/beacon/data/backup-$(date +%F).db'"
+cp /opt/beacon/deploy/backup-beacon.sh /usr/local/bin/backup-beacon.sh
+chmod +x /usr/local/bin/backup-beacon.sh
+( crontab -l 2>/dev/null; echo '15 4 * * * /usr/local/bin/backup-beacon.sh' ) | crontab -
 ```
 
-(Add to a cron job; copy off-box for safety.)
+Snapshots land in `/opt/beacon/data/backups/`. Copy them off-box periodically —
+a backup on the same disk only covers accidental deletion, not disk loss.
 
 ---
 
