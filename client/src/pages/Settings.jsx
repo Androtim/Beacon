@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Appearance from '../components/Appearance'
 import ThemeReset from '../components/ThemeReset'
+import KeyBackup from '../components/KeyBackup'
 import { ArrowLeft, User, Palette, LogOut } from 'lucide-react'
 
 export default function Settings() {
@@ -63,6 +64,13 @@ export default function Settings() {
           )}
         </div>
       </section>
+
+      {/* DM key backup — accounts only (guests have no persistent identity). */}
+      {!isGuest && (
+        <section className="glass-card p-6">
+          <KeyBackup />
+        </section>
+      )}
 
       {/* Appearance / customization */}
       <section className="glass-card p-6">
