@@ -28,7 +28,45 @@ interface FileShareSession {
 // Ephemeral by nature (they reference live sockets / in-browser blobs).
 const fileShares = new Map<string, FileShareSession>()
 const roomFileShares = new Map<string, RoomFileShare>()
-const onlineUsers = new Map<string, { socketId: string; username: string }>()
+// A user can be connected from several tabs/devices at once. Track the full
+// set of sockets per user; presence flips only on the first/last one.
+const userSockets = new Map<string, Map<string, string>>() // userId -> socketId -> username
+
+function socketsOf(userId: string): string[] {
+  return [...(userSockets.get(userId)?.keys() ?? [])]
+}
+function isOnline(userId: string): boolean {
+  return (userSockets.get(userId)?.size ?? 0) > 0
+}
+/** Most recently connected socket for a user (Map keeps insertion order). */
+function newestSocket(userId: string): string | null {
+  const m = userSockets.get(userId)
+  if (!m || m.size === 0) return null
+  let last: string | null = null
+  for (const sid of m.keys()) last = sid
+  return last
+}
+
+// 1:1 P2P file signaling (dm-file-*, group-file-*) is a handshake between two
+// specific sockets, but dm-file-signal carries no transferId to route by. So
+// we pin, per unordered user pair, which socket of each user is engaged — set
+// as each side reveals itself (offer/request/signal). Limitation: one active
+// transfer per peer pair per device; a second simultaneous transfer with the
+// same peer from another device would retarget the pin.
+const filePeerPins = new Map<string, Record<string, string>>()
+function pairKey(a: string, b: string): string {
+  return a < b ? `${a}|${b}` : `${b}|${a}`
+}
+function pinPeer(self: string, other: string, socketId: string): void {
+  const k = pairKey(self, other)
+  const rec = filePeerPins.get(k) ?? {}
+  rec[self] = socketId
+  filePeerPins.set(k, rec)
+}
+/** The other user's pinned socket for this pair, or their newest as fallback. */
+function pinnedSocket(self: string, other: string): string | null {
+  return filePeerPins.get(pairKey(self, other))?.[other] ?? newestSocket(other)
+}
 const voiceRooms = new Map<string, Map<string, string>>() // roomId -> socketId -> username
 const streamRequests = new Map<string, { roomId: string; url: string; fromUserId: string }>() // requestId -> request
 // `${socketId}:${roomId}` -> join timestamp, for accruing watch time on leave.
@@ -59,8 +97,8 @@ export function emitToUsers<E extends keyof ServerToClientEvents>(
   if (!ioRef) return
   const seen = new Set<string>()
   for (const uid of userIds) {
-    const sid = onlineUsers.get(uid)?.socketId
-    if (sid && !seen.has(sid)) {
+    for (const sid of socketsOf(uid)) {
+      if (seen.has(sid)) continue
       seen.add(sid)
       ioRef.to(sid).emit(event, ...args)
     }
@@ -102,8 +140,15 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
   io.on('connection', (rawSocket) => {
     const socket = rawSocket as BeaconSocket
     const { id: userId, username, isGuest } = socket.data.user
-    onlineUsers.set(userId, { socketId: socket.id, username })
-    io.emit('user-online', { id: userId, username })
+    let sockets = userSockets.get(userId)
+    if (!sockets) {
+      sockets = new Map()
+      userSockets.set(userId, sockets)
+    }
+    const wasOffline = sockets.size === 0
+    sockets.set(socket.id, username)
+    // Announce presence only when the user's first device connects.
+    if (wasOffline) io.emit('user-online', { id: userId, username })
 
     /** Register a handler whose payload is validated against its zod schema first. */
     function on<E extends keyof SchemaMap>(event: E, handler: (data: z.infer<SchemaMap[E]>) => void) {
@@ -227,17 +272,19 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
       } catch (e) {
         console.error('Failed to persist private message:', e)
       }
-      const rec = onlineUsers.get(to)
-      if (rec) io.to(rec.socketId).emit('private-message', { from: { id: userId, username }, message, timestamp: ts })
+      // Deliver to every device the recipient has open.
+      for (const sid of socketsOf(to)) {
+        io.to(sid).emit('private-message', { from: { id: userId, username }, message, timestamp: ts })
+      }
       bumpStat(userId, 'messages_sent', 1)
     })
 
     // ---- File-in-DM (P2P transfer between two accounts, relayed by userId) ----
-    function dmRecipientSocket(to: string): string | null {
-      if (isGuest) return null
+    // Guards a peer id for file signaling: must be a real, non-guest account.
+    function validPeer(to: string): boolean {
+      if (isGuest) return false
       const recipient = findUserById(to)
-      if (!recipient || recipient.is_guest) return null
-      return onlineUsers.get(to)?.socketId ?? null
+      return !!recipient && !recipient.is_guest
     }
     on('dm-file-offer', ({ to, transferId, fileInfo }) => {
       if (isGuest) return
@@ -250,19 +297,28 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
       } catch (e) {
         console.error('Failed to persist file offer:', e)
       }
-      const sid = onlineUsers.get(to)?.socketId
-      if (sid) io.to(sid).emit('dm-file-offer', { from: userId, fromUsername: username, transferId, fileInfo })
+      // The sender's socket is one end of the handshake; pin it for this pair.
+      pinPeer(userId, to, socket.id)
+      // Any of the recipient's devices may accept, so offer them all.
+      for (const sid of socketsOf(to)) {
+        io.to(sid).emit('dm-file-offer', { from: userId, fromUsername: username, transferId, fileInfo })
+      }
     })
     on('dm-file-request', ({ to, transferId }) => {
-      const sid = dmRecipientSocket(to)
+      if (!validPeer(to)) return
+      pinPeer(userId, to, socket.id) // accepting device is our end
+      const sid = pinnedSocket(userId, to)
       if (sid) io.to(sid).emit('dm-file-request', { from: userId, transferId })
     })
     on('dm-file-decline', ({ to, transferId }) => {
-      const sid = dmRecipientSocket(to)
+      if (!validPeer(to)) return
+      const sid = pinnedSocket(userId, to)
       if (sid) io.to(sid).emit('dm-file-decline', { from: userId, transferId })
     })
     on('dm-file-signal', ({ to, signal }) => {
-      const sid = dmRecipientSocket(to)
+      if (!validPeer(to)) return
+      pinPeer(userId, to, socket.id)
+      const sid = pinnedSocket(userId, to)
       if (sid) io.to(sid).emit('dm-file-signal', { from: userId, signal })
     })
     on('dm-party-invite', ({ to, roomId }) => {
@@ -276,8 +332,9 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
       } catch (e) {
         console.error('Failed to persist party invite:', e)
       }
-      const sid = onlineUsers.get(to)?.socketId
-      if (sid) io.to(sid).emit('dm-party-invite', { from: userId, fromUsername: username, roomId })
+      for (const sid of socketsOf(to)) {
+        io.to(sid).emit('dm-party-invite', { from: userId, fromUsername: username, roomId })
+      }
     })
 
     // ---- Group DMs ----
@@ -311,11 +368,15 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
     // Group file transfer handshake (1:1 between sharer and each downloader),
     // relayed by userId on its own channel so it never collides with dm-file-*.
     on('group-file-request', ({ to, transferId }) => {
-      const sid = dmRecipientSocket(to)
+      if (!validPeer(to)) return
+      pinPeer(userId, to, socket.id)
+      const sid = pinnedSocket(userId, to)
       if (sid) io.to(sid).emit('group-file-request', { from: userId, transferId })
     })
     on('group-file-signal', ({ to, signal }) => {
-      const sid = dmRecipientSocket(to)
+      if (!validPeer(to)) return
+      pinPeer(userId, to, socket.id)
+      const sid = pinnedSocket(userId, to)
       if (sid) io.to(sid).emit('group-file-signal', { from: userId, signal })
     })
 
@@ -427,9 +488,17 @@ export default function initSocket(server: HttpServer, allowOrigin: (origin: str
     // ---- Disconnect ----
 
     socket.on('disconnect', () => {
-      if (onlineUsers.get(userId)?.socketId === socket.id) {
-        onlineUsers.delete(userId)
-        io.emit('user-offline', userId)
+      const mySockets = userSockets.get(userId)
+      if (mySockets?.delete(socket.id) && mySockets.size === 0) {
+        userSockets.delete(userId)
+        io.emit('user-offline', userId) // last device gone
+      }
+      // Drop any file-signaling pins this socket held.
+      for (const [k, rec] of filePeerPins) {
+        for (const uid of Object.keys(rec)) {
+          if (rec[uid] === socket.id) delete rec[uid]
+        }
+        if (Object.keys(rec).length === 0) filePeerPins.delete(k)
       }
       rooms.handleDisconnect(
         userId,
