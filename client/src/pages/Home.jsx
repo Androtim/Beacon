@@ -37,6 +37,12 @@ export default function Home() {
           </div>
         ))}
       </div>
+
+      <p className="mt-12 text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+        Made by <a href="https://github.com/Androtim" className="underline hover:text-accent">Androtim</a>.
+        Also by me: <a href="https://flexarion.alwaysdata.net/" className="underline hover:text-accent">Flexarion</a>,
+        a science-fiction game studio project from Aix-en-Provence, with a free browser game.
+      </p>
     </div>
   )
 }
