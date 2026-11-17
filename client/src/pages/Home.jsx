@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   Sparkles,
   Upload,
+  ExternalLink,
 } from 'lucide-react'
 import Launcher from '../components/Launcher'
 import { RoomCard } from '../components/RoomCard'
@@ -462,6 +463,31 @@ export default function Home() {
           )
         })}
       </section>
+
+      {/* External links */}
+      <footer
+        className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 pt-2 pb-1 text-xs text-muted"
+        data-testid="home-footer"
+      >
+        <a
+          href="https://flexarion.alwaysdata.net/"
+          target="_blank"
+          rel="noopener"
+          className="inline-flex items-center gap-1.5 hover:text-ink transition-colors"
+        >
+          Flexarion — game studio
+          <ExternalLink className="w-3 h-3" />
+        </a>
+        <a
+          href="https://github.com/Androtim/Beacon"
+          target="_blank"
+          rel="noopener"
+          className="inline-flex items-center gap-1.5 hover:text-ink transition-colors"
+        >
+          Beacon on GitHub
+          <ExternalLink className="w-3 h-3" />
+        </a>
+      </footer>
 
       <CreateRoomModal open={createOpen} onClose={() => setCreateOpen(false)} />
       <JoinRoomModal open={joinOpen} onClose={() => setJoinOpen(false)} />
