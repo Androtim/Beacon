@@ -25,18 +25,18 @@ export const TOKENS = [
 
 export const PRESETS = {
   crystal: {
-    label: 'Crystal',
+    label: 'Beacon Amber',
     mode: 'dark',
     tokens: {
-      '--accent': '242 126 114', // coral #f27e72 — the guiding light
-      '--accent-2': '122 148 187', // muted sapphire
-      '--bg-primary': '#10131A',
-      '--bg-secondary': '#171C26',
-      '--surface': '#161A23',
-      '--surface-raised': '#1D222E',
-      '--text-primary': '#EDEFF3',
-      '--text-secondary': '#929BAD',
-      '--radius': '10px',
+      '--accent': '234 182 109', // amber lamp #eab66d — the guiding light
+      '--accent-2': '147 220 184', // mint signal
+      '--bg-primary': '#0A0B0D',
+      '--bg-secondary': '#0E0F12',
+      '--surface': '#131417',
+      '--surface-raised': '#18191D',
+      '--text-primary': '#F4F1EA',
+      '--text-secondary': '#908D86',
+      '--radius': '14px',
       '--glow-strength': '0.25',
     },
   },
@@ -52,42 +52,43 @@ export const PRESETS = {
       '--surface-raised': '#18202F',
       '--text-primary': '#E9EDF5',
       '--text-secondary': '#8791A6',
-      '--radius': '8px',
+      '--radius': '12px',
       '--glow-strength': '0.2',
     },
   },
   ember: {
-    label: 'Ember',
+    label: 'Ember Coral',
     mode: 'dark',
     tokens: {
-      '--accent': '247 126 114', // warmer coral
+      '--accent': '242 126 114', // warm coral #f27e72
       '--accent-2': '215 158 74', // lantern amber
-      '--bg-primary': '#15100E',
-      '--bg-secondary': '#201714',
-      '--surface': '#1C1512',
-      '--surface-raised': '#251C18',
+      '--bg-primary': '#120E0D',
+      '--bg-secondary': '#1A1311',
+      '--surface': '#181210',
+      '--surface-raised': '#211916',
       '--text-primary': '#F5EEE9',
       '--text-secondary': '#B3A296',
-      '--radius': '12px',
-      '--glow-strength': '0.4',
+      '--radius': '14px',
+      '--glow-strength': '0.35',
     },
   },
   daylight: {
-    label: 'Daylight',
+    label: 'Warm Daylight',
     mode: 'light',
     tokens: {
-      '--accent': '224 82 68', // coral that reads on light
-      '--accent-2': '86 110 146',
-      '--bg-primary': '#F7F7F5',
-      '--bg-secondary': '#EDEDEA',
-      '--surface': '#FFFFFF',
-      '--surface-raised': '#F1F1EE',
-      '--text-primary': '#22252B',
-      '--text-secondary': '#6A7180',
-      '--radius': '10px',
-      '--glow-strength': '0.1',
+      '--accent': '169 97 34', // burnt ochre #a96122 on warm paper
+      '--accent-2': '33 115 78',
+      '--bg-primary': '#F4F0E8',
+      '--bg-secondary': '#EDE8DE',
+      '--surface': '#FFFDF9',
+      '--surface-raised': '#F8F4EC',
+      '--text-primary': '#1C1914',
+      '--text-secondary': '#746F65',
+      '--radius': '14px',
+      '--glow-strength': '0.12',
     },
   },
 }
 
 export const DEFAULT_PRESET = 'crystal'
+

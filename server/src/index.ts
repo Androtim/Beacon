@@ -54,7 +54,7 @@ app.use(express.json({ limit: '64kb' }))
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 50, // signup/login/guest attempts per IP
+  limit: Number(process.env.AUTH_RATE_LIMIT) || 50, // signup/login/guest attempts per IP
   standardHeaders: true,
   legacyHeaders: false,
 })
