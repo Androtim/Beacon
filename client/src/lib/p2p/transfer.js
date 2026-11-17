@@ -258,6 +258,7 @@ export function createReceiver({ channel, transferId, onManifest, onProgress, on
   let metas = null
   const stores = new Map() // fileIndex -> store
   const received = new Map() // fileIndex -> contiguous chunks received
+  const completing = new Set()
   const finished = new Set()
 
   // The manifest comes from the remote peer; a hostile one could announce a
@@ -294,14 +295,15 @@ export function createReceiver({ channel, transferId, onManifest, onProgress, on
   }
 
   async function completeFile(meta) {
-    if (finished.has(meta.i)) return
-    finished.add(meta.i)
+    if (completing.has(meta.i)) return
+    completing.add(meta.i)
     const store = stores.get(meta.i)
     const raw = await store.finish()
     // Rewrap: the OPFS file carries the internal part-name, and may overhang
     // by a torn trailing chunk. Blob parts are by-reference (no byte copy).
     const body = raw.size === meta.size ? raw : raw.slice(0, meta.size)
     onFileComplete?.(new File([body], meta.name, { type: meta.type }), meta)
+    finished.add(meta.i)
     if (metas && finished.size === metas.length) onAllComplete?.()
   }
 

@@ -15,24 +15,24 @@ test('light mode applies a genuinely light palette', async ({ page }) => {
   await page.getByTestId('mode-light').click()
   const lightBg = await bgVar(page)
   expect(lightBg).not.toBe(darkBg)
-  expect(lightBg.toLowerCase()).toBe('#faf8ff') // Daylight background
+  expect(lightBg.toLowerCase()).toBe('#f4f0e8') // Warm Daylight background
 })
 
 test('editing is preview-only until Save, then it persists', async ({ page }) => {
   await page.goto('/settings')
   await page.getByTestId('mode-dark').click()
-  expect(await accentVar(page)).toBe('242 126 114') // default Crystal
+  expect(await accentVar(page)).toBe('234 182 109') // default Beacon Amber
 
   // Pick Midnight — global must NOT change yet (draft/preview only).
   await page.getByTestId('preset-midnight').click()
-  expect(await accentVar(page)).toBe('242 126 114') // still Crystal globally
+  expect(await accentVar(page)).toBe('234 182 109') // still Beacon Amber globally
 
   // Save — now it applies and survives reload.
   await page.getByTestId('save-theme').click()
-  expect(await accentVar(page)).toBe('139 110 209')
+  expect(await accentVar(page)).toBe('124 156 205')
   await page.reload()
   await page.getByTestId('appearance-mode-easy').waitFor()
-  expect(await accentVar(page)).toBe('139 110 209')
+  expect(await accentVar(page)).toBe('124 156 205')
 })
 
 test('dark and light themes are independent', async ({ page }) => {
@@ -71,10 +71,10 @@ test('reset escape hatch restores the default theme', async ({ page }) => {
   await page.getByTestId('mode-dark').click()
   await page.getByTestId('preset-ember').click()
   await page.getByTestId('save-theme').click()
-  expect(await accentVar(page)).not.toBe('242 126 114')
+  expect(await accentVar(page)).not.toBe('234 182 109')
   await page.evaluate(() => {
     const host = [...document.body.children].find((el) => el.shadowRoot?.querySelector('button'))
     host?.shadowRoot?.querySelector('button')?.click()
   })
-  await expect.poll(() => accentVar(page)).toBe('242 126 114')
+  await expect.poll(() => accentVar(page)).toBe('234 182 109')
 })

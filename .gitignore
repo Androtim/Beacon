@@ -62,6 +62,7 @@ data/
 # Uploads folder (if you have one)
 uploads/
 server/uploads/
+Extra_docs
 
 # Session store
 sessions/

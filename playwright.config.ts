@@ -26,6 +26,10 @@ export default defineConfig({
       url: 'http://localhost:3001/api/health',
       reuseExistingServer: true,
       timeout: 60_000,
+      env: {
+        JWT_SECRET: process.env.JWT_SECRET || 'test-secret-for-e2e',
+        AUTH_RATE_LIMIT: process.env.AUTH_RATE_LIMIT || '1000',
+      },
     },
     {
       command: 'npm run dev',
