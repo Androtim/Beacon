@@ -1,44 +1,48 @@
-export function BeaconMark({ className = 'h-9 w-9', size }) {
-  const dim = size === 'sm' ? 'h-8 w-8' : size === 'lg' ? 'h-12 w-12' : className
+export function BeaconMark({ className = 'h-7 w-7', size }) {
+  const dim =
+    size === 'sm'
+      ? 'h-7 w-7'
+      : size === 'lg'
+      ? 'h-10 w-10'
+      : typeof size === 'number'
+      ? ''
+      : className
+  const style = typeof size === 'number' ? { width: size, height: size } : undefined
+
   return (
     <span
-      className={`beacon-mark relative grid shrink-0 place-items-center overflow-hidden rounded-[11px] ${dim}`}
+      style={style}
+      className={`beacon-mark relative grid shrink-0 place-items-center overflow-hidden rounded-lg ${dim}`}
       aria-hidden="true"
     >
-      <svg viewBox="0 0 24 24" className="h-[66%] w-[66%]" fill="none">
+      <svg viewBox="0 0 24 24" className="h-[58%] w-[58%]" fill="none">
+        <circle cx="12" cy="12" r="3" fill="currentColor" />
         <path
-          d="M9.7 9.7h4.6l.9 8.6H8.8l.9-8.6Z"
-          fill="currentColor"
-          fillOpacity=".22"
+          d="M7.8 16.2a6 6 0 0 1 0-8.4m8.4 0a6 6 0 0 1 0 8.4"
           stroke="currentColor"
-          strokeWidth="1.35"
-          strokeLinejoin="round"
-        />
-        <path d="M9 9.7 12 3l3 6.7H9Z" fill="currentColor" />
-        <path d="M9.8 7.6h4.4" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" />
-        <circle cx="12" cy="6.6" r=".9" fill="var(--accent-ink)" />
-        <circle cx="12" cy="13.4" r="1.15" fill="currentColor" />
-        <path
-          d="M7 18.3h10M6.7 20.7c1.6-1 3.2-1 5.3-1s3.7 0 5.3 1"
-          stroke="currentColor"
-          strokeWidth="1.35"
+          strokeWidth="2"
           strokeLinecap="round"
+        />
+        <path
+          d="M4.9 19.1a10 10 0 0 1 0-14.2m14.2 0a10 10 0 0 1 0 14.2"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeOpacity="0.45"
         />
       </svg>
     </span>
   )
 }
 
-export function Wordmark({ compact = false }) {
+export function Wordmark({ compact = false, className = '' }) {
   return (
-    <span className="flex items-baseline gap-[1px]">
-      <span
-        className={`font-serif tracking-[-0.02em] ${compact ? 'text-[19px]' : 'text-[22px]'}`}
-        style={{ color: 'var(--text-primary)' }}
-      >
-        Beacon
-      </span>
-      <span className="text-[22px] leading-none text-accent">.</span>
+    <span
+      className={`font-semibold tracking-[-0.03em] text-ink ${
+        compact ? 'text-[15px]' : 'text-[16px]'
+      } ${className}`}
+    >
+      Beacon
     </span>
   )
 }

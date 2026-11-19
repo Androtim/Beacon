@@ -6,7 +6,6 @@ import {
   Compass,
   FolderUp,
   Home,
-  KeyRound,
   LogIn,
   LogOut,
   MessageSquare,
@@ -15,7 +14,6 @@ import {
   Plus,
   Radio,
   Settings as SettingsIcon,
-  ShieldCheck,
   Trophy,
   X,
 } from 'lucide-react'
@@ -41,7 +39,7 @@ const SPACES = [
   { to: '/leaderboard', label: 'Leaderboard', icon: Trophy, match: (p) => p.startsWith('/leaderboard') },
 ]
 
-function renderLayoutContent({
+function renderSidebarContent({
   collapsed,
   setCollapsed,
   path,
@@ -51,106 +49,60 @@ function renderLayoutContent({
   rooms,
   removeRoom,
   transfers,
-  onOpenCreate,
-  onOpenJoin,
   onNavigateDone,
 }) {
   return (
     <>
-      {/* Brand + collapse toggle */}
+      {/* Brand header */}
       <div
         className={`flex items-center ${
-          collapsed ? 'justify-center px-2' : 'justify-between px-4'
-        } h-[60px] border-b border-line`}
+          collapsed ? 'justify-center px-2' : 'justify-between px-3.5'
+        } h-12 border-b border-line shrink-0`}
       >
         <Link
           to="/"
           onClick={onNavigateDone}
-          className="flex items-center gap-2.5 min-w-0 group"
+          className="flex items-center gap-2.5 min-w-0"
           title="Beacon — Home"
         >
-          <BeaconMark size={30} />
-          {!collapsed && (
-            <div className="min-w-0 flex flex-col">
-              <Wordmark className="text-lg leading-none" />
-              <span className="text-[10px] text-muted tracking-wider uppercase mt-0.5">
-                Watch · Share · Talk
-              </span>
-            </div>
-          )}
+          <BeaconMark size={26} />
+          {!collapsed && <Wordmark />}
         </Link>
         {!collapsed && setCollapsed && (
           <button
             onClick={() => setCollapsed(true)}
-            className="text-muted hover:text-ink p-1.5 rounded-lg hover:bg-panel-2 transition-colors"
+            className="icon-btn w-7 h-7"
             title="Collapse sidebar"
             aria-label="Collapse sidebar"
             data-testid="rail-collapse"
           >
-            <PanelLeftClose className="w-4 h-4" />
+            <PanelLeftClose className="w-3.5 h-3.5" />
           </button>
         )}
       </div>
+
       {collapsed && setCollapsed && (
         <button
           onClick={() => setCollapsed(false)}
-          className="mx-auto mt-2 text-muted hover:text-ink p-1.5 rounded-lg hover:bg-panel-2 transition-colors"
+          className="mx-auto mt-2 icon-btn w-8 h-8"
           title="Expand sidebar"
           aria-label="Expand sidebar"
           data-testid="rail-expand"
         >
-          <PanelLeft className="w-4 h-4" />
+          <PanelLeft className="w-3.5 h-3.5" />
         </button>
       )}
 
-      {/* Launcher on non-home pages (keeps E2E launcher-rail contract) */}
+      {/* Compact launcher on non-home pages */}
       {path !== '/' && !collapsed && (
-        <div className="p-3 border-b border-line">
+        <div className="px-2.5 pt-2.5 pb-2 border-b border-line">
           <Launcher variant="rail" />
         </div>
       )}
 
-      {/* Quick modal triggers when on Home */}
-      {path === '/' && !collapsed && (
-        <div className="p-3 space-y-1.5 border-b border-line">
-          <button
-            type="button"
-            onClick={() => {
-              onNavigateDone?.()
-              onOpenCreate()
-            }}
-            className="w-full py-2.5 px-3 rounded-xl bg-accent hover:bg-accent-strong text-accent-ink font-semibold text-xs flex items-center justify-between shadow-sm transition-all"
-          >
-            <span className="inline-flex items-center gap-2">
-              <Plus className="w-4 h-4 stroke-[2.25]" />
-              Light a watch room
-            </span>
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/15">
-              NEW
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              onNavigateDone?.()
-              onOpenJoin()
-            }}
-            className="w-full py-2 px-3 rounded-xl bg-panel-2 hover:bg-panel-3 border border-line text-ink-soft hover:text-ink text-xs font-medium flex items-center justify-between transition-colors"
-          >
-            <span className="inline-flex items-center gap-2">
-              <KeyRound className="w-3.5 h-3.5 text-accent" />
-              Join with a code
-            </span>
-            <span className="font-mono text-[10px] text-muted">6–8 chars</span>
-          </button>
-        </div>
-      )}
-
-      {/* Scrollable middle */}
-      <div className="flex-1 overflow-y-auto px-2.5 py-3 space-y-5">
-        {/* Spaces */}
+      {/* Main navigation */}
+      <div className="flex-1 overflow-y-auto px-2 py-2.5 space-y-5">
         <nav aria-label="Spaces" className="space-y-0.5">
-          {!collapsed && <div className="px-2.5 pb-1.5 eyebrow">Spaces</div>}
           {SPACES.map(({ to, label, icon: Icon, match }) => {
             const active = match(path)
             return (
@@ -159,35 +111,32 @@ function renderLayoutContent({
                 to={to}
                 onClick={onNavigateDone}
                 title={collapsed ? label : undefined}
-                className={`flex items-center gap-3 px-2.5 py-2 rounded-xl text-sm transition-colors ${
+                className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[13px] transition-colors ${
                   collapsed ? 'justify-center' : ''
                 } ${
                   active
-                    ? 'bg-panel-2 text-ink font-medium border border-line-strong'
-                    : 'text-ink-soft hover:text-ink hover:bg-panel-2/60 border border-transparent'
+                    ? 'bg-panel-2 text-ink font-medium'
+                    : 'text-muted hover:text-ink hover:bg-panel-2/50'
                 }`}
               >
                 <Icon
-                  className={`w-4 h-4 flex-shrink-0 ${
+                  className={`w-4 h-4 shrink-0 ${
                     active ? 'text-accent' : 'text-muted'
                   }`}
                 />
-                {!collapsed && <span className="truncate flex-1">{label}</span>}
-                {!collapsed && active && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-accent" />
-                )}
+                {!collapsed && <span className="truncate">{label}</span>}
               </Link>
             )
           })}
         </nav>
 
-        {/* Open parties */}
+        {/* Active / recent parties */}
         {rooms.length > 0 && (
           <div>
             {!collapsed && (
               <div className="px-2.5 pb-1.5 flex items-center justify-between">
-                <span className="eyebrow">Open parties</span>
-                <span className="text-[10px] text-muted font-mono">{rooms.length}</span>
+                <span className="text-[11px] font-medium text-faint">Open rooms</span>
+                <span className="text-[10px] text-faint font-mono">{rooms.length}</span>
               </div>
             )}
             <div className="space-y-0.5">
@@ -199,38 +148,40 @@ function renderLayoutContent({
                     <Link
                       to={`/party/${r.id}`}
                       onClick={onNavigateDone}
-                      title={collapsed ? `Party ${r.id}${sub ? ` — ${sub}` : ''}` : undefined}
-                      className={`flex-1 min-w-0 flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs transition-colors ${
+                      title={collapsed ? `Room ${r.id}${sub ? ` — ${sub}` : ''}` : undefined}
+                      className={`flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
                         collapsed ? 'justify-center' : ''
                       } ${
                         active
-                          ? 'bg-accent-soft text-ink font-medium border border-accent/30'
-                          : 'text-ink-soft hover:text-ink hover:bg-panel-2/60 border border-transparent'
+                          ? 'bg-accent-soft text-ink font-medium'
+                          : 'text-ink-soft hover:text-ink hover:bg-panel-2/50'
                       }`}
                     >
                       <Radio
-                        className={`w-3.5 h-3.5 flex-shrink-0 ${
+                        className={`w-3.5 h-3.5 shrink-0 ${
                           active ? 'text-accent' : 'text-mint'
                         }`}
                       />
                       {!collapsed && (
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-1.5">
-                            <div className="font-medium text-ink truncate">
+                            <span className="truncate">
                               {r.title && r.title !== `Room ${r.id}` ? r.title : r.id}
-                            </div>
-                            <span className="font-mono text-[10px] text-muted shrink-0">
+                            </span>
+                            <span className="font-mono text-[10px] text-faint shrink-0">
                               {r.id}
                             </span>
                           </div>
-                          {sub && <div className="text-[11px] text-muted truncate">{sub}</div>}
+                          {sub && (
+                            <div className="text-[11px] text-faint truncate">{sub}</div>
+                          )}
                         </div>
                       )}
                     </Link>
                     {!collapsed && (
                       <button
                         onClick={() => removeRoom(r.id)}
-                        className="opacity-0 group-hover:opacity-100 text-muted hover:text-ink p-1 mr-1 rounded transition-opacity"
+                        className="opacity-0 group-hover:opacity-100 text-faint hover:text-ink p-1 mr-0.5 rounded transition-opacity"
                         title="Forget this room"
                         aria-label={`Remove ${r.id} from open parties`}
                       >
@@ -244,30 +195,34 @@ function renderLayoutContent({
           </div>
         )}
 
-        {/* Active transfers */}
+        {/* Active P2P transfer */}
         {transfers?.active && (
           <div>
-            {!collapsed && <div className="px-2.5 pb-1.5 eyebrow">Transfers</div>}
+            {!collapsed && (
+              <div className="px-2.5 pb-1.5 text-[11px] font-medium text-faint">
+                Transfer
+              </div>
+            )}
             <Link
               to="/files"
               onClick={onNavigateDone}
               data-testid="rail-transfer"
-              className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl bg-panel-2 border border-line hover:border-line-strong transition-colors"
+              className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-panel-2 border border-line hover:border-line-strong transition-colors"
               title={`${transfers.mode === 'sharing' ? 'Sending' : 'Receiving'} ${transfers.shareCode} · ${transfers.overallPercent}%`}
             >
-              <ArrowUpDown className="w-4 h-4 text-accent flex-shrink-0 animate-pulse" />
+              <ArrowUpDown className="w-3.5 h-3.5 text-accent shrink-0" />
               {!collapsed && (
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center justify-between text-[11px]">
                     <span className="truncate font-medium text-ink">
                       {transfers.mode === 'sharing' ? 'Sending' : 'Receiving'} ·{' '}
                       {transfers.overallPercent}%
                     </span>
-                    <span className="text-muted font-mono ml-2 text-[10px]">
+                    <span className="text-faint font-mono ml-1.5 text-[10px]">
                       {transfers.shareCode}
                     </span>
                   </div>
-                  <div className="w-full h-1 bg-panel rounded-full overflow-hidden mt-1">
+                  <div className="w-full h-1 bg-panel rounded-full overflow-hidden mt-1.5">
                     <div
                       className="h-full bg-accent transition-all duration-200"
                       style={{ width: `${Math.min(100, transfers.overallPercent)}%` }}
@@ -280,27 +235,12 @@ function renderLayoutContent({
         )}
       </div>
 
-      {/* Direct by design badge */}
-      {!collapsed && (
-        <div className="px-3 pb-2">
-          <div className="p-3 rounded-xl bg-panel-2/80 border border-line">
-            <div className="flex items-center gap-2 text-xs font-medium text-ink mb-0.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-mint shrink-0" />
-              Direct by design
-            </div>
-            <p className="text-[11px] text-muted leading-relaxed">
-              Streams & files travel device-to-device via WebRTC.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Footer / account */}
-      <div className="border-t border-line p-2.5">
+      {/* Account footer */}
+      <div className="border-t border-line p-2 shrink-0">
         {user?.isGuest ? (
           <div
             className={`flex items-center ${
-              collapsed ? 'flex-col gap-2' : 'justify-between gap-2'
+              collapsed ? 'flex-col gap-1.5' : 'justify-between gap-1.5'
             }`}
           >
             {!collapsed && (
@@ -309,27 +249,27 @@ function renderLayoutContent({
                   <LiveDot color={connected ? 'mint' : 'amber'} />
                   <span className="truncate">{user.username}</span>
                 </div>
-                <div className="text-[11px] text-muted">Guest session</div>
+                <div className="text-[11px] text-faint">Guest</div>
               </div>
             )}
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5">
               <Link
                 to="/settings"
                 onClick={onNavigateDone}
-                className="p-2 rounded-lg text-muted hover:text-ink hover:bg-panel-2 transition-colors"
+                className="icon-btn w-7 h-7"
                 title="Settings"
                 aria-label="Settings"
               >
-                <SettingsIcon className="w-4 h-4" />
+                <SettingsIcon className="w-3.5 h-3.5" />
               </Link>
               <Link
                 to="/login"
                 onClick={onNavigateDone}
-                className="btn btn-secondary text-xs py-1.5 px-2.5 flex items-center gap-1.5"
-                title="Sign in to keep your handle and message history"
+                className="btn btn-secondary h-7 px-2.5 text-[11px]"
+                title="Sign in"
                 data-testid="rail-signin"
               >
-                <LogIn className="w-3.5 h-3.5" />
+                <LogIn className="w-3 h-3" />
                 {!collapsed && <span>Sign in</span>}
               </Link>
             </div>
@@ -357,23 +297,23 @@ function renderLayoutContent({
                 </span>
               )}
             </Link>
-            <div className="flex items-center">
+            <div className="flex items-center gap-0.5">
               <Link
                 to="/settings"
                 onClick={onNavigateDone}
-                className="p-1.5 rounded-lg text-muted hover:text-ink hover:bg-panel-2 transition-colors"
+                className="icon-btn w-7 h-7"
                 title="Settings"
                 aria-label="Settings"
               >
-                <SettingsIcon className="w-4 h-4" />
+                <SettingsIcon className="w-3.5 h-3.5" />
               </Link>
               <button
                 onClick={logout}
-                className="p-1.5 rounded-lg text-muted hover:text-coral hover:bg-panel-2 transition-colors"
+                className="icon-btn w-7 h-7 hover:text-coral"
                 title="Log out"
                 aria-label="Log out"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
@@ -423,14 +363,14 @@ export default function Layout({ children }) {
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-app text-ink">
-      {/* Desktop Left rail */}
+      {/* Desktop sidebar */}
       <aside
         aria-label="Primary"
-        className={`hidden md:flex flex-col border-r border-line bg-soft/90 backdrop-blur-xl transition-[width] duration-200 select-none shrink-0 ${
-          collapsed ? 'w-16' : 'w-64'
+        className={`hidden md:flex flex-col border-r border-line bg-soft transition-[width] duration-150 select-none shrink-0 sticky top-0 h-screen ${
+          collapsed ? 'w-[60px]' : 'w-[224px]'
         }`}
       >
-        {renderLayoutContent({
+        {renderSidebarContent({
           collapsed,
           setCollapsed,
           path,
@@ -440,8 +380,6 @@ export default function Layout({ children }) {
           rooms,
           removeRoom,
           transfers,
-          onOpenCreate: () => setCreateOpen(true),
-          onOpenJoin: () => setJoinOpen(true),
         })}
       </aside>
 
@@ -453,8 +391,8 @@ export default function Layout({ children }) {
               className="fixed inset-0 bg-black/70 backdrop-blur-sm"
               onClick={() => setMobileNavOpen(false)}
             />
-            <aside className="relative z-10 w-72 max-w-[84vw] bg-soft border-r border-line flex flex-col h-full">
-              {renderLayoutContent({
+            <aside className="relative z-10 w-64 max-w-[82vw] bg-soft border-r border-line flex flex-col h-full">
+              {renderSidebarContent({
                 collapsed: false,
                 setCollapsed: null,
                 path,
@@ -464,8 +402,6 @@ export default function Layout({ children }) {
                 rooms,
                 removeRoom,
                 transfers,
-                onOpenCreate: () => setCreateOpen(true),
-                onOpenJoin: () => setJoinOpen(true),
                 onNavigateDone: () => setMobileNavOpen(false),
               })}
             </aside>
@@ -473,8 +409,8 @@ export default function Layout({ children }) {
           document.body
         )}
 
-      {/* Main content column */}
-      <div className="flex-1 min-w-0 flex flex-col min-h-screen pb-16 md:pb-0">
+      {/* Main workspace */}
+      <div className="flex-1 min-w-0 flex flex-col min-h-screen pb-14 md:pb-0">
         <Topbar
           onOpenPalette={() => setPaletteOpen(true)}
           onOpenMobileNav={() => setMobileNavOpen(true)}
@@ -485,7 +421,7 @@ export default function Layout({ children }) {
       {/* Mobile bottom bar */}
       <nav
         aria-label="Primary mobile"
-        className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-panel/95 backdrop-blur-xl border-t border-line flex items-center justify-around py-1.5 px-2"
+        className="md:hidden fixed bottom-0 inset-x-0 z-40 h-14 bg-soft/95 backdrop-blur-md border-t border-line flex items-center justify-around px-2"
       >
         {SPACES.slice(0, 2).map(({ to, label, icon: Icon, match }) => {
           const active = match(path)
@@ -493,11 +429,11 @@ export default function Layout({ children }) {
             <Link
               key={to}
               to={to}
-              className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg text-xs ${
+              className={`flex flex-col items-center gap-0.5 px-3 py-1 text-[11px] ${
                 active ? 'text-accent font-medium' : 'text-muted'
               }`}
             >
-              <Icon className="w-5 h-5" />
+              <Icon className="w-4 h-4" />
               <span>{label}</span>
             </Link>
           )
@@ -505,10 +441,10 @@ export default function Layout({ children }) {
         <button
           type="button"
           onClick={() => setCreateOpen(true)}
-          className="flex flex-col items-center justify-center -mt-3 w-11 h-11 rounded-2xl bg-accent text-accent-ink shadow-lg"
+          className="flex items-center justify-center w-9 h-9 rounded-xl bg-accent text-accent-ink"
           aria-label="Create room"
         >
-          <Plus className="w-5 h-5 stroke-[2.25]" />
+          <Plus className="w-4 h-4 stroke-[2.25]" />
         </button>
         {SPACES.slice(2, 4).map(({ to, label, icon: Icon, match }) => {
           const active = match(path)
@@ -516,11 +452,11 @@ export default function Layout({ children }) {
             <Link
               key={to}
               to={to}
-              className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg text-xs ${
+              className={`flex flex-col items-center gap-0.5 px-3 py-1 text-[11px] ${
                 active ? 'text-accent font-medium' : 'text-muted'
               }`}
             >
-              <Icon className="w-5 h-5" />
+              <Icon className="w-4 h-4" />
               <span>{label}</span>
             </Link>
           )

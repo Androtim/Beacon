@@ -213,51 +213,47 @@ export default function WatchParty() {
   }))
 
   return (
-    <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      <div className="flex flex-col lg:flex-row gap-6">
+    <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-4">
+      <div className="flex flex-col lg:flex-row gap-4">
         {/* Stage */}
-        <div className="flex-1 space-y-4 min-w-0">
-          {/* Header */}
-          <header className="panel flex items-center justify-between p-4 gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <Link
-                to="/"
-                className="icon-btn"
-                title="Leave party"
-              >
-                <ArrowLeft size={18} />
+        <div className="flex-1 space-y-3 min-w-0">
+          {/* Compact theater header */}
+          <header className="panel flex items-center justify-between px-3.5 py-2.5 gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Link to="/" className="icon-btn" title="Leave room">
+                <ArrowLeft size={16} />
               </Link>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    onClick={copyCode}
-                    className="flex items-center gap-2 group"
-                    title="Copy room code"
-                  >
-                    <h2 className="font-serif text-lg sm:text-xl text-ink truncate">
-                      {roomTitle}
-                    </h2>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-panel-2 border border-line font-mono text-xs text-accent">
-                      {roomId}
-                      {copied ? (
-                        <Check size={12} className="text-mint" />
-                      ) : (
-                        <Copy
-                          size={12}
-                          className="text-muted group-hover:text-ink transition-colors"
-                        />
-                      )}
-                    </span>
-                  </button>
-                </div>
-                <div
-                  className={`text-[11px] font-medium flex items-center gap-1.5 mt-0.5 ${
+              <div className="min-w-0 flex items-center gap-2.5 flex-wrap">
+                <button
+                  onClick={copyCode}
+                  className="flex items-center gap-2 group min-w-0"
+                  title="Copy room code"
+                >
+                  <h2 className="text-sm font-semibold tracking-[-0.015em] text-ink truncate">
+                    {roomTitle}
+                  </h2>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-panel-2 border border-line font-mono text-[11px] text-accent">
+                    {roomId}
+                    {copied ? (
+                      <Check size={11} className="text-mint" />
+                    ) : (
+                      <Copy
+                        size={11}
+                        className="text-faint group-hover:text-ink transition-colors"
+                      />
+                    )}
+                  </span>
+                </button>
+                <span
+                  className={`text-[11px] flex items-center gap-1.5 ${
                     connected ? 'text-mint' : 'text-coral'
                   }`}
                 >
                   <LiveDot color={connected ? 'mint' : 'amber'} />
-                  <span>{connected ? 'Connected · Frame-synced' : 'Reconnecting…'}</span>
-                </div>
+                  <span className="hidden sm:inline">
+                    {connected ? 'Synced' : 'Reconnecting…'}
+                  </span>
+                </span>
               </div>
             </div>
 
@@ -267,18 +263,18 @@ export default function WatchParty() {
                   <AvatarStack people={avatarPeople} size="xs" max={4} />
                 </div>
               )}
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent-soft border border-accent/25 text-accent">
-                <Users size={14} />
-                <span className="text-xs font-bold" data-testid="participant-count">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-panel-2 border border-line text-ink-soft">
+                <Users size={13} className="text-muted" />
+                <span className="text-xs font-mono font-medium" data-testid="participant-count">
                   {participants.length}
                 </span>
               </div>
               <button
                 type="button"
                 onClick={() => setInviteOpen(true)}
-                className="btn btn-primary text-xs py-1.5 px-3 inline-flex items-center gap-1.5"
+                className="btn btn-primary h-8 px-3 text-xs"
               >
-                <UserPlus size={14} />
+                <UserPlus size={13} />
                 <span className="hidden sm:inline">Invite</span>
               </button>
             </div>
@@ -460,29 +456,10 @@ export default function WatchParty() {
             </div>
           )}
 
-          {/* Reassurance strip */}
-          <div className="hidden sm:grid grid-cols-3 gap-2">
-            {[
-              { icon: Sparkles, text: 'Everyone lands in the same frame' },
-              { icon: Volume2, text: 'Voice stays opt-in' },
-              { icon: ShieldCheck, text: 'Late joiners snap to sync' },
-            ].map((item, idx) => {
-              const Icon = item.icon
-              return (
-                <div
-                  key={idx}
-                  className="px-3 py-2 rounded-xl bg-panel/60 border border-line flex items-center gap-2 text-[11px] text-muted"
-                >
-                  <Icon className="w-3.5 h-3.5 text-accent shrink-0" />
-                  <span className="truncate">{item.text}</span>
-                </div>
-              )
-            })}
-          </div>
         </div>
 
         {/* Sidebar: presence + voice + chat */}
-        <div className="w-full lg:w-[350px] panel flex flex-col h-[520px] lg:h-[calc(100vh-7rem)] lg:sticky lg:top-20 overflow-hidden shrink-0">
+        <div className="w-full lg:w-[340px] panel flex flex-col h-[520px] lg:h-[calc(100vh-5rem)] lg:sticky lg:top-16 overflow-hidden shrink-0">
           <div className="px-4 pt-3 border-b border-line flex items-center justify-between bg-panel">
             <div className="flex items-center gap-1">
               <button
